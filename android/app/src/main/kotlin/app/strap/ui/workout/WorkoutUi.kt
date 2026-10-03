@@ -84,6 +84,8 @@ private fun SportTile(sport: Sport, selected: Boolean, modifier: Modifier = Modi
 fun SportGrid(sports: List<Sport>, selected: Sport?, onPick: (Sport) -> Unit) {
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 4) {
         sports.forEach { s -> SportTile(s, s == selected, Modifier.weight(1f)) { onPick(s) } }
+        // Fill the last row with empty slots so its tiles keep the same width as the rows above.
+        repeat((4 - sports.size % 4) % 4) { Spacer(Modifier.weight(1f)) }
     }
 }
 

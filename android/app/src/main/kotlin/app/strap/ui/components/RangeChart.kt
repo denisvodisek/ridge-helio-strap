@@ -57,7 +57,7 @@ fun RangeChart(
         "$when_ · ${b.min.roundToInt()}–${b.max.roundToInt()} $unit, avg ${b.mean.roundToInt()} · peak at ${clockOf(b.tMax)}"
     }
     Column(modifier) {
-        if (onScrub == null) ValueLabels(label, buckets.maxOfOrNull { it.max }, buckets.minOfOrNull { it.min })
+        if (onScrub == null) ValueLabels(label, null, null) // gridlines carry the scale
         Spacer(
             Modifier.fillMaxWidth().height(height).scrub { f -> scrub = f; onScrub?.invoke(f?.let(::at)) }.drawWithCache {
                 val lo = (buckets.minOfOrNull { it.min } ?: 0.0) - 3

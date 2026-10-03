@@ -87,7 +87,7 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier, 
     val recovery = data.recovery.valueOrNull
     var hiddenIllness by rememberSaveable { mutableStateOf<String?>(null) }
     val entrance = rememberEntrance()
-    LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Box(Modifier.stagger(entrance, 0)) { WeekStrip(data.stripDays, data.recoveryByDay, data.day, nav.selectDay) } }
         data.illness?.takeIf { it != hiddenIllness }?.let { text -> item { IllnessBanner(text) { hiddenIllness = text } } }
         item {

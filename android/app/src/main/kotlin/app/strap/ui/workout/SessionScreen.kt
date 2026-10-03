@@ -68,9 +68,13 @@ fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
     val own = s.getString("source") != "strap"
     LaunchedEffect(start, end) {
         points = try {
+            // The server cuts days in its owner's timezone, which needn't be the phone's: a session
+            // near midnight can sit in either neighbour, so read all three and keep the window.
             val day = Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).toLocalDate()
-            val arr = api.daySeries(day, "hr").getJSONObject("series").getJSONArray("hr")
-            List(arr.length()) { arr.getJSONArray(it).let { p -> Point(p.getLong(0), p.getDouble(1)) } }.filter { it.t in start until end }
+            listOf(day.minusDays(1), day, day.plusDays(1)).flatMap { d ->
+                val arr = api.daySeries(d, "hr").getJSONObject("series").getJSONArray("hr")
+                List(arr.length()) { arr.getJSONArray(it).let { p -> Point(p.getLong(0), p.getDouble(1)) } }
+            }.filter { it.t in start until end }.distinctBy { it.t }.sortedBy { it.t }
         } catch (_: ApiException) {
             emptyList()
         }

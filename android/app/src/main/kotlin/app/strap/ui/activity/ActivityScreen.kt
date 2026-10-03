@@ -91,7 +91,7 @@ fun ActivityScreen(api: ApiClient, refreshKey: Any?, onOpenSession: (JSONObject)
     val readiness = d.summary.getJSONObject("recovery").optJSONObject("readiness")
     val mvpa = series("mvpa_min")
     val weekActive = (0..6).mapNotNull { mvpa[today.minusDays(it.toLong())] }.takeIf { it.isNotEmpty() }?.sum()
-    LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 104.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             val load = if (strain.has("cardio_load")) strain.getDouble("cardio_load") else null
             val value = if (strain.has("value") && !strain.isNull("value")) strain.getDouble("value") else null

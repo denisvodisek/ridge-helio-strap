@@ -129,7 +129,8 @@ fun DayLineChart(
     // space that reads like missing data (DESIGN U3).
     val now = System.currentTimeMillis().takeIf { it in dayStart until dayEnd }
     Column(modifier) {
-        if (onScrub == null) ValueLabels(selected?.let { "${clockOf(it.t)} · ${it.v.roundToInt()} $unit" }, points.maxOfOrNull { it.v }, points.minOfOrNull { it.v })
+        // The labelled gridlines carry the scale now, so the faint high/low line would only collide with them.
+        if (onScrub == null) ValueLabels(selected?.let { "${clockOf(it.t)} · ${it.v.roundToInt()} $unit" }, null, null)
         // drawWithCache: the path is built once per size/data change, not on every frame.
         Spacer(
             Modifier.fillMaxWidth().height(height).scrub { f ->
