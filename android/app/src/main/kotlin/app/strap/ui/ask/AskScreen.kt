@@ -56,8 +56,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One turn. [tools] are the data the answer looked at, shown small under it, so it's checkable. */
-private data class Turn(val role: String, val text: String, val tools: List<String> = emptyList(), val failed: Boolean = false)
+/**
+ * One turn. [tools] are the data the answer looked at, shown small under it, so it's checkable;
+ * [status] is what the model is doing while the reply hasn't started ("Reading your history…").
+ */
+private data class Turn(val role: String, val text: String, val tools: List<String> = emptyList(), val failed: Boolean = false,
+                        val status: String? = null, val done: Boolean = true)
 
 /** Questions that show what this can do on day one; tapping one asks it. */
 private val STARTERS = listOf(
@@ -84,7 +88,8 @@ fun AskScreen(api: ApiClient) {
     var thinking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
-    LaunchedEffect(turns.size, thinking) { if (turns.isNotEmpty()) list.animateScrollToItem(turns.size + if (thinking) 1 else 0) }
+    // Follow the reply as it grows (its length changes on every streamed piece).
+    LaunchedEffect(turns.size, turns.lastOrNull()?.text?.length) { if (turns.isNotEmpty()) list.animateScrollToItem(turns.size) }
 
     fun ask(question: String) {
         val q = question.trim()
@@ -94,13 +99,25 @@ fun AskScreen(api: ApiClient) {
         thinking = true
         scope.launch {
             val history = JSONArray().apply { turns.filter { !it.failed }.takeLast(20).forEach { put(JSONObject().put("role", it.role).put("content", it.text)) } }
+            // The reply grows in place as pieces arrive: one turn, replaced on every event.
+            turns.add(Turn("assistant", "", status = "Thinking…", done = false))
+            val at = turns.lastIndex
             try {
-                val out = api.chat(history)
-                val tools = out.optJSONArray("tools")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("name") } }.orEmpty()
-                turns.add(Turn("assistant", out.getString("reply").ifBlank { "No answer came back. Try asking another way." }, tools.distinct()))
+                api.chatStream(history).collect { e ->
+                    val t = turns[at]
+                    turns[at] = when (e.optString("type")) {
+                        "status" -> t.copy(status = e.optString("text"))
+                        "delta" -> t.copy(text = t.text + e.optString("text"), status = null)
+                        "done" -> t.copy(done = true, status = null, tools = e.optJSONArray("tools")?.let { a -> List(a.length()) { a.getString(it) } }.orEmpty().distinct(),
+                            text = t.text.ifBlank { "No answer came back. Try asking another way." })
+                        "error" -> t.copy(text = e.optString("message"), failed = true, done = true, status = null)
+                        else -> t
+                    }
+                }
             } catch (e: ApiException) {
-                turns.add(Turn("assistant", e.message ?: "That didn't work.", failed = true))
+                turns[at] = turns[at].copy(text = e.message ?: "That didn't work.", failed = true, done = true, status = null)
             }
+            if (!turns[at].done) turns[at] = turns[at].copy(done = true, status = null)
             thinking = false
         }
     }
@@ -109,7 +126,6 @@ fun AskScreen(api: ApiClient) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (turns.isEmpty()) item { Starters(::ask) }
             items(turns) { t -> if (t.role == "user") Question(t.text) else Answer(t) }
-            if (thinking) item { Thinking() }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -147,11 +163,21 @@ private fun Question(text: String) {
     }
 }
 
-/** The answer: plain text on the page, like a reply, with what it looked at underneath. */
+/** The answer: rendered Markdown, cards and charts on the page, with what it looked at underneath. */
 @Composable
 private fun Answer(t: Turn) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(t.text, style = RidgeType.paragraph, color = if (t.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+        if (t.text.isEmpty() && !t.done) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Thinking()
+                t.status?.let { Text(it, style = RidgeType.body, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        } else if (t.failed) {
+            Text(t.text, style = RidgeType.paragraph, color = MaterialTheme.colorScheme.error)
+        } else {
+            RichAnswer(t.text)
+            t.status?.let { Text(it, style = RidgeType.caption, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
         if (t.tools.isNotEmpty()) {
             Text("Based on " + t.tools.joinToString(", ") { TOOL_NAMES[it] ?: it }, style = RidgeType.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

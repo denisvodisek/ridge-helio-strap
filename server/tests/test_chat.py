@@ -54,3 +54,30 @@ def test_without_a_key_the_chat_says_how_to_add_one(monkeypatch) -> None:
     with pytest.raises(chat.ChatUnavailable, match="OPENROUTER_API_KEY"):
         chat.answer(chat.ChatIn(messages=[{"role": "user", "content": "hi"}]), "UTC")
     config.get_settings.cache_clear()
+
+
+def _sse(chunks: list[dict]) -> bytes:
+    return b"".join(b"data: " + json.dumps({"choices": [{"delta": c}]}).encode() + b"\n\n" for c in chunks) + b"data: [DONE]\n\n"
+
+
+def test_stream_reports_tools_then_streams_the_reply(seeded, monkeypatch) -> None:  # noqa: F811
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config.get_settings.cache_clear()
+    rounds = [
+        _sse([{"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "owner_profile", "arguments": ""}}]},
+              {"tool_calls": [{"index": 0, "function": {"arguments": "{}"}}]}]),
+        _sse([{"content": "You're "}, {"content": "**175 cm**."}]),
+    ]
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, content=rounds[len(sent) - 1], headers={"content-type": "text/event-stream"})
+
+    events = list(chat.stream(chat.ChatIn(messages=[{"role": "user", "content": "How tall am I?"}]), "Asia/Kolkata",
+                              httpx.Client(transport=httpx.MockTransport(handler))))
+    assert [e["type"] for e in events] == ["status", "delta", "delta", "done"]
+    assert "".join(e["text"] for e in events if e["type"] == "delta") == "You're **175 cm**."
+    assert events[-1]["tools"] == ["owner_profile"]
+    assert "Last 14 days" in sent[0]["messages"][0]["content"]  # the context pack rode along
+    assert json.loads(sent[1]["messages"][-1]["content"])["height_cm"] == 175.0

@@ -2,6 +2,9 @@ package app.strap.api
 
 import app.strap.pairing.ServerLink
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -42,6 +45,32 @@ class ApiClient(private val link: ServerLink) {
     suspend fun dismissSuggestion(start: String) {
         request("POST", "/v1/sessions/suggestions/dismiss", JSONObject().put("start", start).toString())
     }
+
+    /**
+     * Ask your data, streamed: one JSON event per line (status while the model looks something
+     * up, delta for each piece of the reply, then done or error), read as they arrive.
+     */
+    fun chatStream(messages: JSONArray): Flow<JSONObject> = flow {
+        val conn = URL(link.baseUrl + "/v1/chat/stream").openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 120_000 // between events; a slow tool round is the longest gap
+            conn.setRequestProperty("Authorization", "Bearer ${link.token}")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.use { it.write(JSONObject().put("messages", messages).toString().toByteArray(Charsets.UTF_8)) }
+            when (val code = conn.responseCode) {
+                200 -> conn.inputStream.bufferedReader().useLines { lines -> lines.filter { it.isNotBlank() }.forEach { emit(JSONObject(it)) } }
+                401 -> throw ApiException("The server refused the token.")
+                else -> throw ApiException("The server answered HTTP $code.")
+            }
+        } catch (e: IOException) {
+            throw ApiException("Could not reach the server.", e)
+        } finally {
+            conn.disconnect()
+        }
+    }.flowOn(Dispatchers.IO)
 
     /** Ask your data: the server runs the model's tool calls, which can take a while. */
     suspend fun chat(messages: JSONArray): JSONObject =

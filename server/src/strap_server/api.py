@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from strap_server import chat, journal, profile, sessions
@@ -265,6 +267,18 @@ def post_chat(
         return chat.answer(body, tz)
     except chat.ChatUnavailable as e:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from e
+
+
+@app.post("/v1/chat/stream")
+def post_chat_stream(
+    body: chat.ChatIn,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StreamingResponse:
+    """Ask your data, streamed as newline-delimited JSON events (status, delta, done, error)."""
+    with connection() as conn:
+        tz = _owner_tz(conn, user_id, settings)
+    return StreamingResponse((json.dumps(e) + "\n" for e in chat.stream(body, tz)), media_type="application/x-ndjson")
 
 
 @app.post("/v1/ingest")
