@@ -82,3 +82,22 @@ waking minutes is suggested when:
 Suggestions are offers, never data: nothing counts as a workout until the owner confirms
 one (it then becomes a `suggested` session with the sport they picked) or dismisses it
 (remembered by its start minute). [CHECK: tune 40 % / 20 min / 3 min on real days]
+
+## S5 · Zepp export import (`import_zepp.py`)
+
+Facts about the export, checked on a real one (2026-10-03), that the importer relies on:
+
+- SLEEP, SPORT and BODY carry UTC timestamps with an offset; HEARTRATE_AUTO, ACTIVITY_MINUTE
+  and SLEEP_MINUTE carry local date + time with no offset. Local times are read in the
+  owner's timezone [CHECK: wrong for days spent in another timezone; the export doesn't say].
+- SLEEP_MINUTE's `date` is one day later than its night: rows dated D fall inside the night
+  SLEEP files under D−1 (first and last minutes match the UTC night to the minute on the
+  nights checked). Each minute is placed at D−1 (D−2 for times from 18:00, for nights that
+  start before midnight) and kept only if it lands inside a UTC night; others are dropped.
+- Zepp writes placeholder nights with start = stop; nights under 30 min are skipped.
+- 0 and −1 mean "not measured" in numeric columns.
+- No HRV, SpO₂, skin temperature or stress in the export: recovery's history rests on resting
+  HR and sleep until the strap's own data accrues.
+
+Workout types stay Zepp's numbers in `workout.sport`; the mapping to Ridge's sports is
+applied when read, so a corrected mapping needs no re-import.

@@ -127,7 +127,7 @@ fun AskScreen(api: ApiClient) {
 private fun Starters(onAsk: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
         Text("Ask about your data", style = RidgeType.sheetTitle)
-        Text("Answers come from your own numbers on your server. Each question sends only what's needed to answer it to the model.",
+        Text("Answers come from your own numbers. Each question sends the model only the data it needs.",
             style = RidgeType.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
         STARTERS.forEach { q ->
             Text(q, style = RidgeType.rowTitle, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -152,7 +152,7 @@ private fun Answer(t: Turn) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(t.text, style = RidgeType.paragraph, color = if (t.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
         if (t.tools.isNotEmpty()) {
-            Text("Looked at: " + t.tools.joinToString(", ") { TOOL_NAMES[it] ?: it }, style = RidgeType.caption,
+            Text("Based on " + t.tools.joinToString(", ") { TOOL_NAMES[it] ?: it }, style = RidgeType.caption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

@@ -1,18 +1,27 @@
 package app.strap.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 
 /** One metric family's colours: the accent (arcs, lines, labels) and its tonal container pair. */
 @Immutable
@@ -62,6 +71,12 @@ data class RidgeColors(
     val zoneGreen: Color,
     val zoneYellow: Color,
     val zoneRed: Color,
+    /** 1 px lines that separate surfaces: the design has no drop shadows (DESIGN v2). */
+    val hairline: Color = surface3,
+    val ink: Color = Color.Unspecified,
+    /** For text 14 sp and up only (≈4:1); smaller text uses onSurfaceVariant. */
+    val inkFaint: Color = Color.Unspecified,
+    val dark: Boolean = true,
 ) {
     /** Recovery zone: ≥ 67 green, 34–66 yellow, below red. */
     fun zone(recovery: Double): Color = when {
@@ -71,74 +86,102 @@ data class RidgeColors(
     }
 }
 
-private val DarkRidge = RidgeColors(
-    bg = Color(0xFF020203), surface1 = Color(0xFF060709), surface2 = Color(0xFF0A0B0D), card = Color(0xFF0C0F11),
-    surface3 = Color(0xFF1D2022), surface4 = Color(0xFF2C2E31),
-    zoneGreen = Color(0xFF5EDB81), zoneYellow = Color(0xFFF4CD4B), zoneRed = Color(0xFFFC5855),
+/**
+ * A theme's raw palette (docs/denis/DESIGN.md "v2"): near-black and nearly colourless, so colour
+ * only ever means data. Every metric colour is ≥ 4.8:1 on its card (checked per theme).
+ */
+private data class Palette(
+    val dark: Boolean,
+    val bg: Long, val card: Long, val surface2: Long, val surface3: Long, val surface4: Long,
+    val ink: Long, val muted: Long, val faint: Long, val hairline: Long, val accent: Long,
+    val green: Long, val yellow: Long, val red: Long,
+    val strain: Long, val sleep: Long, val heart: Long, val stress: Long, val steps: Long, val rem: Long,
 )
 
-private val LightRidge = RidgeColors(
-    bg = Color(0xFFF6F7F8), surface1 = Color(0xFFEFF0F2), surface2 = Color(0xFFEAEBED), card = Color(0xFFFDFDFE),
-    surface3 = Color(0xFFE1E3E5), surface4 = Color(0xFFD7D9DC),
-    zoneGreen = Color(0xFF008D3C), zoneYellow = Color(0xFFB88000), zoneRed = Color(0xFFD02B31),
+/** The themes on offer in Settings → Appearance; [AUTO] follows the system: Midnight or Daylight. */
+enum class RidgeTheme(val label: String, val blurb: String) {
+    AUTO("Auto", "Midnight or Daylight, with your phone"),
+    MIDNIGHT("Midnight", "Near-black, the default"),
+    VOID("Void", "True black for OLED"),
+    DAYLIGHT("Daylight", "Light, for bright rooms"),
+    AURORA("Aurora", "Deep teal, lavender accent"),
+}
+
+private val PALETTES = mapOf(
+    RidgeTheme.MIDNIGHT to Palette(true, 0xFF08090B, 0xFF101114, 0xFF16181C, 0xFF1F2227, 0xFF2A2E34,
+        0xFFF2F4F7, 0xFF9AA0AA, 0xFF6B717B, 0xFF262A30, 0xFFF2F4F7,
+        0xFF34E07A, 0xFFFFD23F, 0xFFFF4D5E, 0xFF4AA8FF, 0xFFA88BFF, 0xFFFF6B8E, 0xFFFF9A3D, 0xFF2FD9C4, 0xFF5CC8F0),
+    RidgeTheme.VOID to Palette(true, 0xFF000000, 0xFF0A0A0A, 0xFF121212, 0xFF1B1B1B, 0xFF262626,
+        0xFFFFFFFF, 0xFFA1A1A1, 0xFF737373, 0xFF232323, 0xFFFFFFFF,
+        0xFF30D46F, 0xFFF5C842, 0xFFF2495A, 0xFF3F9BF2, 0xFF9F86F5, 0xFFF2648A, 0xFFF29340, 0xFF2CCDB9, 0xFF55BDE6),
+    RidgeTheme.DAYLIGHT to Palette(false, 0xFFF3F4F6, 0xFFFFFFFF, 0xFFECEEF1, 0xFFE2E5E9, 0xFFD6DADF,
+        0xFF0B0D10, 0xFF565D67, 0xFF7A818B, 0xFFD9DDE2, 0xFF0B0D10,
+        0xFF12813F, 0xFF946200, 0xFFC8283B, 0xFF1A66D6, 0xFF6A47D9, 0xFFC42C63, 0xFFB35300, 0xFF0B7F74, 0xFF1F8FBF),
+    RidgeTheme.AURORA to Palette(true, 0xFF03191A, 0xFF062224, 0xFF0A2C2E, 0xFF10383A, 0xFF174446,
+        0xFFEEFFFD, 0xFFA3BFBD, 0xFF6F8E8C, 0xFF1A4446, 0xFFE9C8FF,
+        0xFF3FE38A, 0xFFFFD54D, 0xFFFF5C6C, 0xFF5AB0FF, 0xFFB9A0FF, 0xFFFF7A9A, 0xFFFFA14D, 0xFF7FE7F2, 0xFF6FD3F2),
 )
 
-private val DarkMetrics = MetricColors(
-    recoveryTone = MetricTone(Color(0xFF7AD59C), Color(0xFF183E27), Color(0xFFCBEFD6)),
-    strainTone = MetricTone(Color(0xFF88C1FF), Color(0xFF1F3654), Color(0xFFCFE7FF)),
-    sleepTone = MetricTone(Color(0xFFC3AEFF), Color(0xFF382F51), Color(0xFFE6DFFF)),
-    heartTone = MetricTone(Color(0xFFFF9E96), Color(0xFF502825), Color(0xFFFFD8D4)),
-    stressTone = MetricTone(Color(0xFFF5AC69), Color(0xFF4B2E11), Color(0xFFFEDEC3)),
-    stepsTone = MetricTone(Color(0xFF44D4E2), Color(0xFF003E44), Color(0xFFBFEFF4)),
-    track = DarkRidge.surface3,
-    stages = StageColors(deep = Color(0xFF7B66E8), light = Color(0xFFCBC0FF), rem = Color(0xFF5CC8F0), awake = Color(0xFFF2A65A)),
+/** A metric's accent, a tinted wash of it over the card, and readable text on that wash. */
+private fun tone(accent: Color, p: Palette): MetricTone {
+    val card = Color(p.card)
+    return MetricTone(accent, lerp(card, accent, if (p.dark) 0.16f else 0.12f), lerp(accent, Color(p.ink), if (p.dark) 0.45f else 0.55f))
+}
+
+private fun ridgeOf(p: Palette) = RidgeColors(
+    bg = Color(p.bg), surface1 = Color(p.bg), surface2 = Color(p.surface2), card = Color(p.card),
+    surface3 = Color(p.surface3), surface4 = Color(p.surface4),
+    zoneGreen = Color(p.green), zoneYellow = Color(p.yellow), zoneRed = Color(p.red),
+    hairline = Color(p.hairline), ink = Color(p.ink), inkFaint = Color(p.faint), dark = p.dark,
 )
 
-private val LightMetrics = MetricColors(
-    recoveryTone = MetricTone(Color(0xFF007F43), Color(0xFFCBEFD6), Color(0xFF003319)),
-    strainTone = MetricTone(Color(0xFF2769B7), Color(0xFFCFE7FF), Color(0xFF0E294A)),
-    sleepTone = MetricTone(Color(0xFF7055B0), Color(0xFFE6DFFF), Color(0xFF2C2047)),
-    heartTone = MetricTone(Color(0xFFAB413E), Color(0xFFFFD8D4), Color(0xFF451816)),
-    stressTone = MetricTone(Color(0xFFA05100), Color(0xFFFEDEC3), Color(0xFF401F00)),
-    stepsTone = MetricTone(Color(0xFF007E8F), Color(0xFFBFEFF4), Color(0xFF003239)),
-    track = LightRidge.surface3,
-    stages = StageColors(deep = Color(0xFF3F2E91), light = Color(0xFFAE9FEE), rem = Color(0xFF1F8FBF), awake = Color(0xFFD27A1E)),
+private fun metricsOf(p: Palette) = MetricColors(
+    recoveryTone = tone(Color(p.green), p),
+    strainTone = tone(Color(p.strain), p),
+    sleepTone = tone(Color(p.sleep), p),
+    heartTone = tone(Color(p.heart), p),
+    stressTone = tone(Color(p.stress), p),
+    stepsTone = tone(Color(p.steps), p),
+    track = Color(p.surface3),
+    // Deep is the sleep hue pushed towards the background, light towards the ink: one family,
+    // three depths; REM and awake keep their own hues (DESIGN U2).
+    stages = StageColors(
+        deep = lerp(Color(p.sleep), Color(p.bg), if (p.dark) 0.25f else 0.2f),
+        light = lerp(Color(p.sleep), Color(p.ink), if (p.dark) 0.45f else 0.35f).let { lerp(it, Color(p.card), 0.15f) },
+        rem = Color(p.rem), awake = Color(p.stress),
+    ),
 )
 
-val LocalMetricColors = staticCompositionLocalOf { DarkMetrics }
-val LocalRidgeColors = staticCompositionLocalOf { DarkRidge }
+private fun schemeOf(p: Palette): ColorScheme {
+    val ink = Color(p.ink)
+    val base = if (p.dark) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        background = Color(p.bg), onBackground = ink, surface = Color(p.bg), onSurface = ink, onSurfaceVariant = Color(p.muted),
+        surfaceVariant = Color(p.surface3), surfaceTint = Color.Transparent,
+        surfaceContainerLowest = Color(p.bg), surfaceContainerLow = Color(p.surface2), surfaceContainer = Color(p.card),
+        surfaceContainerHigh = Color(p.surface3), surfaceContainerHighest = Color(p.surface4),
+        outline = Color(p.faint), outlineVariant = Color(p.hairline),
+        // Primary is ink (or the theme's one accent): buttons are neutral, colour is for data.
+        primary = Color(p.accent), onPrimary = Color(p.bg),
+        primaryContainer = Color(p.surface3), onPrimaryContainer = ink,
+        secondary = Color(p.accent), onSecondary = Color(p.bg),
+        secondaryContainer = Color(p.surface3), onSecondaryContainer = ink,
+        inverseSurface = ink, inverseOnSurface = Color(p.bg), inversePrimary = Color(p.surface3),
+        error = Color(p.red), onError = Color(p.bg),
+    )
+}
 
-// Material slots: surface = bg (screens, bars), surfaceContainer = card, High = surface3
-// (dialogs, date picker), Highest = surface4 (inactive switch track).
-private val Dark = darkColorScheme(
-    background = DarkRidge.bg, onBackground = Color(0xFFEDEFF0),
-    surface = DarkRidge.bg, onSurface = Color(0xFFEDEFF0), onSurfaceVariant = Color(0xFFA2A5A8),
-    surfaceVariant = DarkRidge.surface3, surfaceTint = Color.Transparent,
-    surfaceContainerLowest = DarkRidge.bg, surfaceContainerLow = DarkRidge.surface1, surfaceContainer = DarkRidge.card,
-    surfaceContainerHigh = DarkRidge.surface3, surfaceContainerHighest = DarkRidge.surface4,
-    outline = Color(0xFF6F7275), outlineVariant = Color(0xFF191B1D),
-    primary = Color(0xFFE6E8EA), onPrimary = Color(0xFF050607),
-    primaryContainer = Color(0xFF242729), onPrimaryContainer = Color(0xFFEDEFF0),
-    secondary = Color(0xFFE6E8EA), onSecondary = Color(0xFF050607),
-    secondaryContainer = Color(0xFF1F2224), onSecondaryContainer = Color(0xFFEDEFF0),
-    inverseSurface = Color(0xFFEDEFF0), inverseOnSurface = Color(0xFF101213), inversePrimary = Color(0xFF151618),
-    error = Color(0xFFFFB4AB), onError = Color(0xFF690005),
-)
+val LocalMetricColors = staticCompositionLocalOf { metricsOf(PALETTES.getValue(RidgeTheme.MIDNIGHT)) }
+val LocalRidgeColors = staticCompositionLocalOf { ridgeOf(PALETTES.getValue(RidgeTheme.MIDNIGHT)) }
 
-private val Light = lightColorScheme(
-    background = LightRidge.bg, onBackground = Color(0xFF101213),
-    surface = LightRidge.bg, onSurface = Color(0xFF101213), onSurfaceVariant = Color(0xFF4D5053),
-    surfaceVariant = LightRidge.surface3, surfaceTint = Color.Transparent,
-    surfaceContainerLowest = LightRidge.bg, surfaceContainerLow = LightRidge.surface1, surfaceContainer = LightRidge.card,
-    surfaceContainerHigh = LightRidge.surface3, surfaceContainerHighest = LightRidge.surface4,
-    outline = Color(0xFF7E8084), outlineVariant = Color(0xFFDCDEE0),
-    primary = Color(0xFF151618), onPrimary = Color(0xFFF7F8FA),
-    primaryContainer = Color(0xFFDCDEE0), onPrimaryContainer = Color(0xFF101213),
-    secondary = Color(0xFF151618), onSecondary = Color(0xFFF7F8FA),
-    secondaryContainer = Color(0xFFDFE1E4), onSecondaryContainer = Color(0xFF101213),
-    inverseSurface = Color(0xFF101213), inverseOnSurface = Color(0xFFEDEFF0), inversePrimary = Color(0xFFE6E8EA),
-    error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF),
-)
+/** The swatch a theme shows in the picker: background, card and accent. */
+fun themeSwatch(theme: RidgeTheme, systemDark: Boolean): Triple<Color, Color, Color> {
+    val p = PALETTES.getValue(resolve(theme, systemDark))
+    return Triple(Color(p.bg), Color(p.card), Color(p.green))
+}
+
+private fun resolve(theme: RidgeTheme, systemDark: Boolean) =
+    if (theme == RidgeTheme.AUTO) (if (systemDark) RidgeTheme.MIDNIGHT else RidgeTheme.DAYLIGHT) else theme
 
 /** The design's type: Roboto (system), 400 for numbers and body, 500 for titles; nothing bolder. */
 object RidgeType {
@@ -171,14 +214,27 @@ private val Type = Typography().let { t ->
     )
 }
 
-/** Follows the system light/dark setting (owner's choice). */
+/** The chosen theme ([RidgeTheme]), with the status and navigation bar icons to match it. */
 @Composable
-fun StrapTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    CompositionLocalProvider(
-        LocalMetricColors provides if (dark) DarkMetrics else LightMetrics,
-        LocalRidgeColors provides if (dark) DarkRidge else LightRidge,
-    ) {
-        MaterialTheme(colorScheme = if (dark) Dark else Light, typography = Type, content = content)
+fun StrapTheme(theme: RidgeTheme = RidgeTheme.AUTO, content: @Composable () -> Unit) {
+    val p = PALETTES.getValue(resolve(theme, isSystemInDarkTheme()))
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !p.dark
+                isAppearanceLightNavigationBars = !p.dark
+            }
+        }
+    }
+    CompositionLocalProvider(LocalMetricColors provides metricsOf(p), LocalRidgeColors provides ridgeOf(p)) {
+        MaterialTheme(colorScheme = schemeOf(p), typography = Type, shapes = Shapes, content = content)
     }
 }
+
+/** Cards 20, tiles and buttons 12, chips 8: rounded rectangles, not pills (DESIGN v2). */
+private val Shapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp), small = RoundedCornerShape(8.dp), medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(20.dp), extraLarge = RoundedCornerShape(28.dp),
+)

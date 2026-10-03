@@ -128,7 +128,7 @@ def test_a_young_history_says_how_far_the_baseline_has_come(seeded) -> None:
     rec = early["recovery"]["withheld"]
     assert rec["reason"] == "learning_baseline"
     assert rec["progress"]["need"] == 5 and rec["progress"]["have"] < 5
-    assert f'{rec["progress"]["have"]} of 5 nights' in rec["message"]
+    assert "5 nights" in rec["message"] and f'{rec["progress"]["have"]} so far' in rec["message"]
     strain = early["strain"]
     assert strain["withheld"]["reason"] == "learning_baseline" and strain["withheld"]["progress"]["need"] == 7
     assert strain["cardio_load"] >= 0  # the day's load stays visible, just not on the 0-21 scale

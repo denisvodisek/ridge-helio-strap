@@ -197,7 +197,7 @@ private fun RecoveryCard(data: TodayData, onOpen: () -> Unit) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val week = data.recoveryWeekTo(data.day)?.let { " · week average ${it.roundToInt()}%" } ?: ""
-                Subtle("${recovery.value.roundToInt()}%$week. What stood out against your last 42 days:")
+                Subtle("${recovery.value.roundToInt()}%$week. Compared with your last 42 days:")
                 // Today shows the two parts worth knowing (anything flagged first, then the heaviest);
                 // the full breakdown lives on Recovery, one tap away, not twice (DESIGN U6).
                 val shown = data.factors.sortedWith(compareBy<Factor>({ STATE_ORDER[it.state] ?: 2 }, { -it.weight })).take(2)

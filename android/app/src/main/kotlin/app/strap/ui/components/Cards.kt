@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +44,7 @@ import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
 import kotlin.math.roundToInt
 
-/** The card every screen uses: `card` colour, 20 dp corners, 16 dp padding. */
+/** The card every screen uses: `card` colour, a 1 dp hairline (no shadows), 20 dp corners, 16 dp padding. */
 @Composable
 fun RidgeCard(
     modifier: Modifier = Modifier,
@@ -55,6 +56,7 @@ fun RidgeCard(
 ) {
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(radius)).background(LocalRidgeColors.current.card)
+            .border(1.dp, LocalRidgeColors.current.hairline, RoundedCornerShape(radius))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(padding),
         verticalArrangement = Arrangement.spacedBy(spacing),
         content = body,

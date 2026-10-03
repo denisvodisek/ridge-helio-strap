@@ -217,7 +217,7 @@ def recovery_card(cur: Cursor, user_id: UUID, day: date, today: date) -> dict:
     if row is None:
         have = max(_rows_before(cur, user_id, day, m, RECOVERY_BASELINE_DAYS) for m in ("hrv_sleep_avg", "rhr_daily"))
         if have < RECOVERY_BASELINE_MIN:
-            text = f"Recovery first learns your usual HRV and resting heart rate: {have} of {RECOVERY_BASELINE_MIN} nights so far."
+            text = f"Recovery needs {RECOVERY_BASELINE_MIN} nights to learn your usual HRV and resting heart rate. {have} so far."
             return withheld(LEARNING, {LEARNING: text}, (have, RECOVERY_BASELINE_MIN))
         return withheld(freshness.NOT_DERIVED_YET)
     score, flags = int(row[0]), row[1]
@@ -251,7 +251,7 @@ def strain_card(cur: Cursor, user_id: UUID, day: date, missing: str = freshness.
     p95, n = strain_scale(cur, user_id, day)
     if n < STRAIN_SCALE_MIN_DAYS:
         # SPEC S2: a P95 of a few days is just the hardest of them, so day one always read 21.0.
-        text = f"Strain is scored against your own hard days: {n} of {STRAIN_SCALE_MIN_DAYS} days so far."
+        text = f"Strain is scored against your own hard days, so it needs {STRAIN_SCALE_MIN_DAYS} days of data first. {n} so far."
         return {**withheld(LEARNING, {LEARNING: text}, (n, STRAIN_SCALE_MIN_DAYS)), "cardio_load": round(row[0], 1)}
     return {"value": strain_from_load(row[0], p95), "max": 21.0, "cardio_load": round(row[0], 1), "flags": row[1]}
 

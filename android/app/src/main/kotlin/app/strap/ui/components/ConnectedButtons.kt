@@ -26,7 +26,7 @@ import app.strap.ui.theme.RidgeType
 
 /**
  * The connected button group (replaces SegmentedButton): 40 dp buttons 2 dp apart, outer
- * corners 20 and inner 8; the selected one rounds fully and fills with `primary`.
+ * corners 12 and inner 6 (rounded rectangles, DESIGN v2); the selected one fills with `primary`.
  */
 @Composable
 fun <T> ConnectedButtons(options: List<T>, selected: T, label: (T) -> String, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
@@ -35,8 +35,8 @@ fun <T> ConnectedButtons(options: List<T>, selected: T, label: (T) -> String, mo
     Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEachIndexed { i, o ->
             val on = o == selected
-            val start by animateDpAsState(if (on || i == 0) 20.dp else 8.dp, tween(200))
-            val end by animateDpAsState(if (on || i == options.lastIndex) 20.dp else 8.dp, tween(200))
+            val start by animateDpAsState(if (on || i == 0) 12.dp else 6.dp, tween(200))
+            val end by animateDpAsState(if (on || i == options.lastIndex) 12.dp else 6.dp, tween(200))
             val bg by animateColorAsState(if (on) scheme.primary else idle, tween(200))
             val fg by animateColorAsState(if (on) scheme.onPrimary else scheme.onSurfaceVariant, tween(200))
             Box(

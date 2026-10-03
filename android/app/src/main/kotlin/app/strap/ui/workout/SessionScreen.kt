@@ -182,7 +182,7 @@ private fun Recovery(hrr: JSONObject?) {
     RidgeCard(spacing = 6.dp) {
         CardHeader("Heart-rate recovery")
         if (hrr == null) {
-            Subtle("Needs heart rate in the two minutes after you stop. It comes with the next sync if the strap stayed on.")
+            Subtle("Needs heart rate from the two minutes after you stop. If the strap stayed on, it shows up after the next sync.")
             return@RidgeCard
         }
         Row(verticalAlignment = Alignment.Bottom) {

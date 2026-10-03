@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -117,7 +118,7 @@ fun DayLineChart(
     // [dayStart] + [spanMs] is the window drawn: a whole day by default, or one workout with
     // its own [axis] labels (start, quarters, end).
     val dayEnd = dayStart + spanMs
-    val grid = LocalRidgeColors.current.surface3
+    val grid = LocalRidgeColors.current.hairline
     val sleepShade = LocalMetricColors.current.sleepTone.container.copy(alpha = 0.55f)
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
     val labels = rememberTextMeasurer()
@@ -147,14 +148,23 @@ fun DayLineChart(
                 fun x(t: Long) = ((t - dayStart).toFloat() / (dayEnd - dayStart)) * size.width
                 fun y(v: Double) = size.height - ((v - lo) / (hi - lo)).toFloat() * size.height
                 val path = Path()
+                // The area under each unbroken run, closed down to the baseline: a gap stays a gap.
+                val area = Path()
                 var prev: Point? = null
+                var runStart = 0f
                 for (p in points) {
-                    if (prev == null || p.t - prev.t > maxGapMs) path.moveTo(x(p.t), y(p.v)) else path.lineTo(x(p.t), y(p.v))
+                    if (prev == null || p.t - prev.t > maxGapMs) {
+                        if (prev != null) { area.lineTo(x(prev.t), size.height); area.lineTo(runStart, size.height); area.close() }
+                        path.moveTo(x(p.t), y(p.v)); area.moveTo(x(p.t), y(p.v)); runStart = x(p.t)
+                    } else {
+                        path.lineTo(x(p.t), y(p.v)); area.lineTo(x(p.t), y(p.v))
+                    }
                     prev = p
                 }
+                prev?.let { area.lineTo(x(it.t), size.height); area.lineTo(runStart, size.height); area.close() }
+                val fill = Brush.verticalGradient(listOf(color.copy(alpha = 0.26f), color.copy(alpha = 0f)))
                 val peak = points.maxByOrNull { it.v }?.let { Offset(x(it.t), y(it.v)) }
                 val shades = shaded.map { s -> x(s.start.coerceAtLeast(dayStart)) to x(s.end.coerceAtMost(dayEnd)) }.filter { (l, r) -> r > l }
-                val gridX = listOf(1, 2, 3).map { x(dayStart + it * spanMs / 4) }
                 val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                 val sel = selected?.let { Offset(x(it.t), y(it.v)) }
                 val ticks = if (points.isEmpty()) emptyList() else valueTicks(labels, lo, hi, faint, ::y)
@@ -166,8 +176,10 @@ fun DayLineChart(
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
                     }
                     for ((l, r) in shades) drawRoundRect(sleepShade, Offset(l, 0f), Size(r - l, size.height), CornerRadius(6.dp.toPx()))
-                    for (gx in gridX) drawLine(grid, Offset(gx, 0f), Offset(gx, size.height), 1.dp.toPx())
                     valueGrid(ticks, grid)
+                    drawPath(area, fill)
+                    // A soft glow: the same line, wide and faint, underneath. No blur (cheap on every frame).
+                    drawPath(path, color.copy(alpha = 0.18f), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round))
                     drawPath(path, color, style = stroke)
                     if (sel == null) peak?.let { drawCircle(color, 6.dp.toPx(), it) }
                     sel?.let {

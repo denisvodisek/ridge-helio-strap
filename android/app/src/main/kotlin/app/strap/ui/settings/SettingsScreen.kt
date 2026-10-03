@@ -1,10 +1,23 @@
 package app.strap.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -22,8 +35,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,7 +50,10 @@ import app.strap.sync.SyncService
 import app.strap.ui.components.Grouped
 import app.strap.ui.components.IconCircle
 import app.strap.ui.components.ListRow
+import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeTheme
 import app.strap.ui.theme.RidgeType
+import app.strap.ui.theme.themeSwatch
 import java.net.URI
 import java.time.Instant
 import java.time.LocalDate
@@ -54,6 +74,7 @@ fun SettingsScreen(app: StrapApp, onProfile: () -> Unit, onChangeStrap: () -> Un
     val server = remember(sync) { app.vault.loadServer() }
     val last = remember(sync) { app.store.lastSync() }
     val waiting = remember(sync) { app.store.unpushedCounts().values.sum() }
+    val scheme = MaterialTheme.colorScheme
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -61,6 +82,8 @@ fun SettingsScreen(app: StrapApp, onProfile: () -> Unit, onChangeStrap: () -> Un
         Section("You", listOf(
             Item(Icons.Outlined.Person, "Profile", "Date of birth, sex, height, activity level", onClick = onProfile),
         ))
+        Text("Appearance", style = RidgeType.label, color = scheme.primary, modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 2.dp))
+        ThemePicker(app)
         Section("Strap", listOf(
             Item(Icons.Outlined.Watch, "Helio Strap", pairing?.mac ?: "Not paired", onClick = onChangeStrap),
             Item(Icons.Outlined.Sync, last?.let { "Last sync ${time(it.first)}" } ?: "Not synced yet",
@@ -103,3 +126,32 @@ private fun time(at: Instant): String {
         else -> t.format(DateTimeFormatter.ofPattern("d MMM HH:mm"))
     }
 }
+
+/** Themes as swatches you can see before you pick: background, card and a data colour each. */
+@Composable
+private fun ThemePicker(app: StrapApp) {
+    val current by app.theme.theme.collectAsStateWithLifecycle()
+    val dark = isSystemInDarkTheme()
+    val haptics = LocalHapticFeedback.current
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        RidgeTheme.entries.forEach { t ->
+            val (bg, card, accent) = themeSwatch(t, dark)
+            val on = t == current
+            Column(
+                Modifier.width(104.dp).clip(RoundedCornerShape(16.dp))
+                    .border(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.onSurface else LocalRidgeColors.current.hairline, RoundedCornerShape(16.dp))
+                    .clickable { app.theme.set(t); haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(10.dp)).background(bg).padding(8.dp)) {
+                    Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(6.dp)).background(card))
+                    Box(Modifier.align(Alignment.BottomStart).size(12.dp).clip(CircleShape).background(accent))
+                }
+                Text(t.label, style = RidgeType.label)
+                Text(t.blurb, style = RidgeType.caption, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+            }
+        }
+    }
+}
+

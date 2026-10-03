@@ -156,7 +156,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as StrapApp
-        setContent { StrapTheme { AppShell(app) } }
+        setContent {
+            val theme by app.theme.theme.collectAsStateWithLifecycle()
+            StrapTheme(theme) { AppShell(app) }
+        }
     }
 
     override fun onStart() {

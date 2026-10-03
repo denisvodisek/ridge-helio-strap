@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,7 +26,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,18 +47,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import app.strap.ui.components.ConnectedButtons
+import app.strap.ui.components.HoldToConfirm
 import app.strap.ui.components.RidgeCard
+import app.strap.ui.components.SlidingNumber
 import app.strap.ui.components.Subtle
 import app.strap.ui.components.clockOf
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
-import kotlinx.coroutines.delay
-import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+import org.json.JSONObject
 
 /** One sport as a tappable tile: icon over name, filled when chosen. */
 @Composable
@@ -129,7 +129,7 @@ fun WorkoutSheet(store: WorkoutStore, onDismiss: () -> Unit, onStart: (Sport) ->
                         onLog(sport, start, start.plusSeconds(minutes * 60L))
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp), shape = MaterialTheme.shapes.medium,
             ) { Text(if (mode == Mode.NOW) "Start ${sport.label.lowercase()}" else "Save ${sport.label.lowercase()}", style = RidgeType.cardTitle) }
         }
     }
@@ -154,13 +154,12 @@ fun OngoingBar(ongoing: Ongoing, onStop: () -> Unit, onCancel: () -> Unit, modif
         }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(ongoing.sport.label, style = RidgeType.label, color = tone.onContainer)
-            Text("%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60), style = RidgeType.rowValue.copy(fontFeatureSettings = "tnum"), color = tone.onContainer)
+            SlidingNumber("%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60), RidgeType.rowValue.copy(fontFeatureSettings = "tnum"), tone.onContainer)
+            Text("Hold ■ to finish", style = RidgeType.caption, color = tone.onContainer.copy(alpha = 0.7f))
         }
         IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, "Discard workout", tint = tone.onContainer) }
-        FilledTonalButton(onClick = onStop) {
-            Icon(Icons.Rounded.Stop, null, Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Stop")
+        HoldToConfirm(tone.onContainer, tone.onContainer.copy(alpha = 0.2f), onConfirm = onStop) {
+            Icon(Icons.Rounded.Stop, "Hold to finish the workout", tint = tone.onContainer)
         }
     }
 }

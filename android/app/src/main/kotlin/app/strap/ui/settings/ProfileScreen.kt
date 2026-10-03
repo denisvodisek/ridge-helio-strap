@@ -136,7 +136,7 @@ fun ProfileScreen(api: ApiClient) {
         RidgeCard(spacing = 8.dp) {
             Text(if (done == 5) "Your profile is complete" else "${5 - done} of 5 still to set", style = RidgeType.cardTitle)
             StepProgress(done, 5, LocalMetricColors.current.recovery)
-            Subtle("Energy, strain, sleep need and VO₂max are computed from these. Changing one recalculates every day you have.")
+            Subtle("Calories, strain, sleep need and VO₂max use these. Change one and every past day is recalculated.")
         }
         Label("Date of birth", "your age and sleep need")
         Grouped(listOf(Unit)) { _, shape ->
@@ -147,7 +147,7 @@ fun ProfileScreen(api: ApiClient) {
         }
         Label("Sex", "metabolic rate, VO₂max")
         ConnectedButtons(listOf<String?>("male", "female"), f.sex, { if (it == "male") "Male" else "Female" }) { form = f.copy(sex = it) }
-        Subtle("As the published formulas use it (BMR, VO₂max).", Modifier.padding(start = 4.dp))
+        Subtle("Sex at birth: the calorie and VO₂max formulas are built on it.", Modifier.padding(start = 4.dp))
         Label("Height", "BMI, metabolic rate, stride")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // A stepper beside the field: most edits are a centimetre or two, not a retype.
@@ -196,7 +196,7 @@ fun ProfileScreen(api: ApiClient) {
                 }
             },
             enabled = f != saved && f.valid && !saving,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(56.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(56.dp), shape = MaterialTheme.shapes.medium,
         ) { Text(if (saving) "Saving and recalculating…" else "Save", style = RidgeType.cardTitle) }
     }
     if (picking) {

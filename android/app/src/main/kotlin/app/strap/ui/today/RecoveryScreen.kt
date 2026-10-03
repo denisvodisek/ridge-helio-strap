@@ -93,7 +93,7 @@ private fun ReadinessCard(recovery: Double, data: TodayData, zone: androidx.comp
         Subtle(
             when {
                 readiness != null -> loadSentence(readiness.load, readiness.typical, recovery.roundToInt() - readiness.value)
-                data.day == LocalDate.now() -> "Not reduced yet: today's load is not known."
+                data.day == LocalDate.now() -> "Today's load isn't in yet, so this is still this morning's number."
                 else -> "Final value for that day."
             },
         )

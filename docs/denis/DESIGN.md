@@ -51,3 +51,34 @@ chip and Settings. Navigation stays five tabs, never swipe-between-tabs for scor
 - Contrast AA in both themes; touch targets ≥ 48 dp; charts have a content description that
   reads the takeaway sentence.
 - Screenshots for review come from the demo data only.
+
+## v2 · The design system (2026-10-03)
+
+From a second, fuller reference pass (Refero styles for Linear, Raycast, Auros, Bevel, Apple
+dark and Stryds; Whoop's brand guidelines; Kinetics, MicroKit, Motion Primitives, Magic UI,
+Aceternity; Liquid Glass; Component Gallery; Oura, Gentler Streak, Bevel). Skipped as low
+signal: AppShot (marketing shots, light apps), DESIGN.md (no dark health systems), Garmin.
+
+**Principle: colour is data.** The interface is near-black and nearly colourless; the only
+saturated pixels are metric values. Primary buttons are ink-filled (Raycast), one per screen.
+
+- **Themes** (Settings → Appearance): Auto, Midnight `#08090B` (default), Void `#000000`
+  (OLED; metric colours slightly desaturated against halation), Daylight `#F3F4F6`, Aurora
+  `#03191A` (lavender accent). All tokens in `ui/theme/Theme.kt`; every metric colour ≥ 4.8:1
+  on its card.
+- **Surfaces**: card one step up from the background, 1 dp hairline, no drop shadows.
+  Radius: cards 20, tiles and buttons 12 (rounded rectangles, not pills), chips 8.
+- **Charts**: 2 dp line with a 7 dp 18 %-alpha glow underneath (no blur), a vertical
+  gradient fill (26 % → 0) down to the baseline per unbroken run, 3 horizontal hairline
+  gridlines labelled inside the plot, no vertical grid. Card charts stay unlabelled.
+- **Motion** (Kinetics springs as Compose): numbers damping 0.54 / stiffness 280 (digits roll
+  independently, `SlidingNumber`), layout 0.67 / 320, toggles 0.60 / 340, fades expo-out
+  220 ms. Ending a workout is hold-to-confirm (800 ms ring, haptic on commit).
+- **Type** (pending the font download): Geist with `tnum` on every number, Geist Mono for
+  axes and timers; hero numerals 56–72 sp weight 500, labels 11 sp uppercase +0.08 em.
+- **Icons** (pending the download): Phosphor Light at 24 dp, Regular at 16–20, Fill for the
+  selected tab; replaces `material-icons-extended`.
+- **Copy**: plain, short, the answer first; no exclamation marks, no metaphors, no "journey".
+
+Not yet: shared-element card → detail transitions, Haze blur on the floating bars, an aurora
+background on Ask (API 33+ only).

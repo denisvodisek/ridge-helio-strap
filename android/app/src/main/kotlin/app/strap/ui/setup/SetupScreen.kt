@@ -322,7 +322,7 @@ private fun Frame(step: Int?, icon: ImageVector, title: String, intro: String, b
 private fun Primary(text: String, enabled: Boolean = true, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     val r = LocalRidgeColors.current
     Button(
-        onClick = onClick, enabled = enabled, modifier = modifier.height(56.dp),
+        onClick = onClick, enabled = enabled, modifier = modifier.height(56.dp), shape = MaterialTheme.shapes.medium,
         colors = ButtonDefaults.buttonColors(disabledContainerColor = r.surface4.copy(alpha = 0.6f)),
     ) { Text(text, style = RidgeType.cardTitle) }
 }
@@ -330,7 +330,7 @@ private fun Primary(text: String, enabled: Boolean = true, modifier: Modifier = 
 @Composable
 private fun Buttons(onCancel: (() -> Unit)?, label: String, enabled: Boolean = true, onNext: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        onCancel?.let { OutlinedButton(onClick = it, modifier = Modifier.weight(1f).height(56.dp)) { Text("Cancel", style = RidgeType.cardTitle) } }
+        onCancel?.let { OutlinedButton(onClick = it, modifier = Modifier.weight(1f).height(56.dp), shape = MaterialTheme.shapes.medium) { Text("Cancel", style = RidgeType.cardTitle) } }
         Primary(label, enabled, Modifier.weight(1f), onNext)
     }
 }
