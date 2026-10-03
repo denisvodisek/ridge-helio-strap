@@ -12,9 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.MonitorWeight
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -56,6 +54,7 @@ import app.strap.ui.components.StepProgress
 import app.strap.ui.components.Subtle
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
 import java.time.Instant
 import java.time.LocalDate
@@ -143,7 +142,7 @@ fun ProfileScreen(api: ApiClient) {
             ListRow(shape, f.dob?.format(DateTimeFormatter.ofPattern("d MMMM yyyy")) ?: "Not set",
                 f.dob?.let { "${Period.between(it, LocalDate.now()).years} years old" } ?: "Sets your age and your sleep need",
                 onClick = { picking = true },
-                leading = { IconCircle(Icons.Outlined.Cake, scheme.secondaryContainer, scheme.onSecondaryContainer) })
+                leading = { IconCircle(RidgeIcons.birthday, scheme.secondaryContainer, scheme.onSecondaryContainer) })
         }
         Label("Sex", "metabolic rate, VO₂max")
         ConnectedButtons(listOf<String?>("male", "female"), f.sex, { if (it == "male") "Male" else "Female" }) { form = f.copy(sex = it) }
@@ -174,7 +173,7 @@ fun ProfileScreen(api: ApiClient) {
             ListRow(shape, weight?.let { "%.1f kg".format(it.getDouble("kg")) } ?: "No weight logged",
                 weight?.let { "Logged " + Instant.ofEpochMilli(it.getLong("ts")).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("d MMM yyyy")) + " · log a new one in Journal" }
                     ?: "Log one in Journal: energy and VO₂max need it",
-                leading = { IconCircle(Icons.Rounded.MonitorWeight, scheme.secondaryContainer, scheme.onSecondaryContainer) })
+                leading = { IconCircle(RidgeIcons.weight, scheme.secondaryContainer, scheme.onSecondaryContainer) })
         }
         Button(
             onClick = {

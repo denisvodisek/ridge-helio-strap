@@ -2,35 +2,27 @@ package app.strap.ui.workout
 
 import android.content.Context
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
-import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
-import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.DirectionsBike
-import androidx.compose.material.icons.rounded.FitnessCenter
-import androidx.compose.material.icons.rounded.Pool
-import androidx.compose.material.icons.rounded.SelfImprovement
-import androidx.compose.material.icons.rounded.SportsTennis
 import androidx.compose.material.icons.rounded.Stairs
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.ui.graphics.vector.ImageVector
+import app.strap.ui.theme.RidgeIcons
+import java.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
-import java.time.Instant
 
 /** The server's closed sport list (docs/denis/SPEC.md S3), with a name and an icon each. */
 enum class Sport(val key: String, val label: String, val icon: ImageVector) {
-    TENNIS("tennis", "Tennis", Icons.Rounded.SportsTennis),
-    TREADMILL("treadmill", "Treadmill", Icons.Rounded.Speed),
-    STAIRS("stairs", "Stairs", Icons.Rounded.Stairs),
-    RUN("run", "Run", Icons.AutoMirrored.Rounded.DirectionsRun),
-    WALK("walk", "Walk", Icons.AutoMirrored.Rounded.DirectionsWalk),
-    RIDE("ride", "Ride", Icons.Rounded.DirectionsBike),
-    GYM("gym", "Gym", Icons.Rounded.FitnessCenter),
-    SWIM("swim", "Swim", Icons.Rounded.Pool),
-    YOGA("yoga", "Yoga", Icons.Rounded.SelfImprovement),
-    OTHER("other", "Other", Icons.Rounded.Bolt),
+    TENNIS("tennis", "Tennis", RidgeIcons.tennis),
+    TREADMILL("treadmill", "Treadmill", RidgeIcons.treadmill),
+    STAIRS("stairs", "Stairs", RidgeIcons.stairs),
+    RUN("run", "Run", RidgeIcons.run),
+    WALK("walk", "Walk", RidgeIcons.walk),
+    RIDE("ride", "Ride", RidgeIcons.ride),
+    GYM("gym", "Gym", RidgeIcons.gym),
+    SWIM("swim", "Swim", RidgeIcons.swim),
+    YOGA("yoga", "Yoga", RidgeIcons.yoga),
+    OTHER("other", "Other", RidgeIcons.other),
     ;
 
     companion object {

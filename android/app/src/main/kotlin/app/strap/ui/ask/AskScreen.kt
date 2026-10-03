@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import app.strap.api.ApiClient
 import app.strap.api.ApiException
 import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -117,7 +118,7 @@ fun AskScreen(api: ApiClient) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { ask(draft) }),
             )
             FilledIconButton(onClick = { ask(draft) }, enabled = draft.isNotBlank() && !thinking, modifier = Modifier.padding(start = 8.dp).size(52.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.Send, "Send")
+                Icon(RidgeIcons.send, "Send")
             }
         }
     }

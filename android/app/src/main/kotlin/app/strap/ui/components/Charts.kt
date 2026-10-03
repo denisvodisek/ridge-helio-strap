@@ -195,7 +195,7 @@ fun DayLineChart(
 
 /** Measured labels for [niceTicks] in [lo, hi], each at its y. Build inside drawWithCache. */
 internal fun valueTicks(measurer: TextMeasurer, lo: Double, hi: Double, color: Color, y: (Double) -> Float): List<Pair<Float, TextLayoutResult>> =
-    niceTicks(lo, hi).map { v -> y(v) to measurer.measure(v.roundToInt().toString(), RidgeType.caption.copy(color = color)) }
+    niceTicks(lo, hi).map { v -> y(v) to measurer.measure(v.roundToInt().toString(), RidgeType.axis.copy(color = color)) }
 
 /** Faint dashed value gridlines, each labelled at the right edge: what gives a detail chart its scale (DESIGN U3). */
 internal fun DrawScope.valueGrid(ticks: List<Pair<Float, TextLayoutResult>>, grid: Color) {
@@ -341,7 +341,7 @@ internal fun HourAxis() = EvenAxis(listOf("00", "06", "12", "18", "24"))
 @Composable
 internal fun EvenAxis(labels: List<String>, slots: Boolean = false) {
     Layout(
-        content = { labels.forEach { Text(it, style = RidgeType.caption, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+        content = { labels.forEach { Text(it, style = RidgeType.axis, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
     ) { measurables, constraints ->
         val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0)) }

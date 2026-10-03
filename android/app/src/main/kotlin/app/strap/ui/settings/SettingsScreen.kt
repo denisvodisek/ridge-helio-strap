@@ -20,15 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.CloudDone
-import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,6 +43,7 @@ import app.strap.ui.components.Grouped
 import app.strap.ui.components.IconCircle
 import app.strap.ui.components.ListRow
 import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeTheme
 import app.strap.ui.theme.RidgeType
 import app.strap.ui.theme.themeSwatch
@@ -80,25 +73,25 @@ fun SettingsScreen(app: StrapApp, onProfile: () -> Unit, onChangeStrap: () -> Un
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Section("You", listOf(
-            Item(Icons.Outlined.Person, "Profile", "Date of birth, sex, height, activity level", onClick = onProfile),
+            Item(RidgeIcons.profile, "Profile", "Date of birth, sex, height, activity level", onClick = onProfile),
         ))
         Text("Appearance", style = RidgeType.label, color = scheme.primary, modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 2.dp))
         ThemePicker(app)
         Section("Strap", listOf(
-            Item(Icons.Outlined.Watch, "Helio Strap", pairing?.mac ?: "Not paired", onClick = onChangeStrap),
-            Item(Icons.Outlined.Sync, last?.let { "Last sync ${time(it.first)}" } ?: "Not synced yet",
+            Item(RidgeIcons.strap, "Helio Strap", pairing?.mac ?: "Not paired", onClick = onChangeStrap),
+            Item(RidgeIcons.sync, last?.let { "Last sync ${time(it.first)}" } ?: "Not synced yet",
                 last?.let { it.second ?: "Complete" } ?: "Tap to sync now") { SyncService.start(app) },
         ))
         Section("Server", listOf(
-            Item(if (waiting == 0) Icons.Outlined.CloudDone else Icons.Outlined.CloudUpload,
+            Item(if (waiting == 0) RidgeIcons.uploaded else RidgeIcons.uploading,
                 server?.baseUrl?.let { runCatching { URI(it).host }.getOrNull() ?: it } ?: "Not connected",
                 if (waiting == 0) "Everything uploaded" else "$waiting waiting to upload", onClick = onChangeServer),
         ))
         Section("About", listOf(
-            Item(Icons.Outlined.Info, "Ridge ${BuildConfig.VERSION_NAME}", "Free software, AGPL-3.0. Source code and licences", external = true) { links.openUri(SOURCE) },
+            Item(RidgeIcons.info, "Ridge ${BuildConfig.VERSION_NAME}", "Free software, AGPL-3.0. Source code and licences", external = true) { links.openUri(SOURCE) },
         ))
         Section("Advanced", listOf(
-            Item(Icons.Outlined.BugReport, "Diagnostics", "What the strap delivered, sync details, the settings probe", onClick = onDiagnostics),
+            Item(RidgeIcons.diagnostics, "Diagnostics", "What the strap delivered, sync details, the settings probe", onClick = onDiagnostics),
         ))
     }
 }
@@ -111,7 +104,7 @@ private fun Section(title: String, items: List<Item>) {
         ListRow(shape, item.title, item.detail, onClick = item.onClick,
             leading = { IconCircle(item.icon, scheme.secondaryContainer, scheme.onSecondaryContainer) },
             trailing = {
-                Icon(if (item.external) Icons.AutoMirrored.Rounded.OpenInNew else Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = scheme.onSurfaceVariant)
+                Icon(if (item.external) Icons.AutoMirrored.Rounded.OpenInNew else RidgeIcons.chevron, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             })
     }
 }

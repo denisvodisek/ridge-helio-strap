@@ -24,10 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -95,7 +97,13 @@ fun Gauge(value: String, unit: String?, fraction: Float?, color: Color, size: Dp
             val trackStart = if (sweep > 0.5f) start + sweep + 9f else start
             val trackSweep = start + 270f - trackStart
             if (trackSweep > 0f) drawArc(track, trackStart, trackSweep, false, topLeft, arc, style = style)
-            if (sweep > 0.5f) drawArc(color, start, sweep, false, topLeft, arc, style = style)
+            if (sweep > 0.5f) {
+                // A soft glow under the arc (no blur: the same arc, wider and faint), then the arc
+                // itself brightening along its sweep towards the value (DESIGN v2).
+                drawArc(color.copy(alpha = 0.16f), start, sweep, false, topLeft, arc, style = Stroke(w * 2.4f, cap = StrokeCap.Round))
+                val ramp = Brush.sweepGradient(0f to color.copy(alpha = 0.55f), (sweep / 360f).coerceAtMost(1f) to color, center = center)
+                rotate(start, pivot = center) { drawArc(ramp, 0f, sweep, false, topLeft, arc, style = style) }
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (crown) Crown(size * 0.13f)

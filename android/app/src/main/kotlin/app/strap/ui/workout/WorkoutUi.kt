@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +53,7 @@ import app.strap.ui.components.Subtle
 import app.strap.ui.components.clockOf
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
 import java.time.Instant
 import java.time.LocalDate
@@ -157,9 +157,9 @@ fun OngoingBar(ongoing: Ongoing, onStop: () -> Unit, onCancel: () -> Unit, modif
             SlidingNumber("%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60), RidgeType.rowValue.copy(fontFeatureSettings = "tnum"), tone.onContainer)
             Text("Hold ■ to finish", style = RidgeType.caption, color = tone.onContainer.copy(alpha = 0.7f))
         }
-        IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, "Discard workout", tint = tone.onContainer) }
+        IconButton(onClick = onCancel) { Icon(RidgeIcons.close, "Discard workout", tint = tone.onContainer) }
         HoldToConfirm(tone.onContainer, tone.onContainer.copy(alpha = 0.2f), onConfirm = onStop) {
-            Icon(Icons.Rounded.Stop, "Hold to finish the workout", tint = tone.onContainer)
+            Icon(RidgeIcons.stop, "Hold to finish the workout", tint = tone.onContainer)
         }
     }
 }

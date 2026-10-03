@@ -44,11 +44,12 @@ import app.strap.ui.components.SideStat
 import app.strap.ui.components.Subtle
 import app.strap.ui.components.clockOf
 import app.strap.ui.theme.LocalMetricColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
-import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * One workout: strain on the day's own 0–21 scale, the HR curve across the session, time in
@@ -145,7 +146,7 @@ fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {
-                Icon(Icons.Outlined.Delete, null)
+                Icon(RidgeIcons.delete, null)
                 Text("  Delete workout")
             }
         }

@@ -30,23 +30,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Today
-import androidx.compose.material.icons.filled.Watch
-import androidx.compose.material.icons.outlined.Bedtime
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
-import androidx.compose.material.icons.outlined.Watch
 import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
@@ -128,6 +116,7 @@ import app.strap.ui.syncLine
 import app.strap.ui.syncProgress
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
+import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
 import app.strap.ui.theme.StrapTheme
 import app.strap.ui.today.RecoveryContent
@@ -169,11 +158,11 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    TODAY("Today", Icons.Outlined.Today, Icons.Filled.Today),
-    SLEEP("Sleep", Icons.Outlined.Bedtime, Icons.Filled.Bedtime),
-    ACTIVITY("Activity", Icons.AutoMirrored.Outlined.DirectionsRun, Icons.AutoMirrored.Rounded.DirectionsRun),
-    JOURNAL("Journal", Icons.Outlined.EditNote, Icons.Filled.EditNote),
-    STRAP("Strap", Icons.Outlined.Watch, Icons.Filled.Watch),
+    TODAY("Today", RidgeIcons.today, RidgeIcons.todayOn),
+    SLEEP("Sleep", RidgeIcons.sleep, RidgeIcons.sleepOn),
+    ACTIVITY("Activity", RidgeIcons.activity, RidgeIcons.activityOn),
+    JOURNAL("Journal", RidgeIcons.journal, RidgeIcons.journalOn),
+    STRAP("Strap", RidgeIcons.strap, RidgeIcons.strapOn),
 }
 
 /** What covers the tabs; the tab under it stays highlighted in the navigation bar. */
@@ -377,20 +366,20 @@ private fun AppShell(app: StrapApp) {
                             }
                         },
                         navigationIcon = {
-                            if (top != null) IconButton(onClick = { stack.removeAt(stack.lastIndex) }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                            if (top != null) IconButton(onClick = { stack.removeAt(stack.lastIndex) }) { Icon(RidgeIcons.back, "Back") }
                         },
                         actions = {
                             val muted = MaterialTheme.colorScheme.onSurfaceVariant
                             when {
-                                top == Pushed.Recovery -> IconButton(onClick = { sheet = Infos.recovery }) { Icon(Icons.Outlined.Info, "About recovery", tint = muted) }
+                                top == Pushed.Recovery -> IconButton(onClick = { sheet = Infos.recovery }) { Icon(RidgeIcons.info, "About recovery", tint = muted) }
                                 top is Pushed.Detail -> IconButton(onClick = { sheet = if (top.metric.isSteps) Infos.detailSteps else Infos.detail }) {
-                                    Icon(Icons.Outlined.Info, "Reading the chart", tint = muted)
+                                    Icon(RidgeIcons.info, "Reading the chart", tint = muted)
                                 }
                                 top == null -> {
-                                    if (tab == Tab.TODAY) IconButton(onClick = { picking = true }) { Icon(Icons.Outlined.CalendarMonth, "Pick a day", tint = muted) }
-                                    if (tab == Tab.JOURNAL) IconButton(onClick = { sheet = Infos.journal }) { Icon(Icons.Outlined.Info, "About the journal", tint = muted) }
-                                    IconButton(onClick = { push(Pushed.Ask) }) { Icon(Icons.Rounded.AutoAwesome, "Ask about your data", tint = MaterialTheme.colorScheme.primary) }
-                                    IconButton(onClick = { push(Pushed.Settings) }) { Icon(Icons.Outlined.Settings, "Settings", tint = muted) }
+                                    if (tab == Tab.TODAY) IconButton(onClick = { picking = true }) { Icon(RidgeIcons.calendar, "Pick a day", tint = muted) }
+                                    if (tab == Tab.JOURNAL) IconButton(onClick = { sheet = Infos.journal }) { Icon(RidgeIcons.info, "About the journal", tint = muted) }
+                                    IconButton(onClick = { push(Pushed.Ask) }) { Icon(RidgeIcons.ask, "Ask about your data", tint = MaterialTheme.colorScheme.primary) }
+                                    IconButton(onClick = { push(Pushed.Settings) }) { Icon(RidgeIcons.settings, "Settings", tint = muted) }
                                 }
                             }
                         },
@@ -404,7 +393,7 @@ private fun AppShell(app: StrapApp) {
                 if (top == null && ongoing == null && (tab == Tab.TODAY || tab == Tab.ACTIVITY)) {
                     ExtendedFloatingActionButton(
                         onClick = { workoutSheet = true },
-                        icon = { Icon(Icons.Rounded.FitnessCenter, null) },
+                        icon = { Icon(RidgeIcons.workout, null) },
                         text = { Text("Workout", style = RidgeType.cardTitle) },
                         shape = RoundedCornerShape(20.dp),
                         containerColor = MaterialTheme.colorScheme.primaryContainer,

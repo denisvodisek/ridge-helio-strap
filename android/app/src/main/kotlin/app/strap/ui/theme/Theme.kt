@@ -18,7 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import app.strap.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -143,11 +146,12 @@ private fun metricsOf(p: Palette) = MetricColors(
     stressTone = tone(Color(p.stress), p),
     stepsTone = tone(Color(p.steps), p),
     track = Color(p.surface3),
-    // Deep is the sleep hue pushed towards the background, light towards the ink: one family,
-    // three depths; REM and awake keep their own hues (DESIGN U2).
+    // One sleep family in three depths; REM and awake keep their own hues (DESIGN U2).
+    // Deep is the denser shade in every theme: it sinks towards the background on dark themes and
+    // towards the ink on light ones; light goes the other way.
     stages = StageColors(
-        deep = lerp(Color(p.sleep), Color(p.bg), if (p.dark) 0.25f else 0.2f),
-        light = lerp(Color(p.sleep), Color(p.ink), if (p.dark) 0.45f else 0.35f).let { lerp(it, Color(p.card), 0.15f) },
+        deep = if (p.dark) lerp(Color(p.sleep), Color(p.bg), 0.25f) else lerp(Color(p.sleep), Color(p.ink), 0.3f),
+        light = if (p.dark) lerp(Color(p.sleep), Color(p.ink), 0.45f).let { lerp(it, Color(p.card), 0.15f) } else lerp(Color(p.sleep), Color(p.bg), 0.5f),
         rem = Color(p.rem), awake = Color(p.stress),
     ),
 )
@@ -183,34 +187,51 @@ fun themeSwatch(theme: RidgeTheme, systemDark: Boolean): Triple<Color, Color, Co
 private fun resolve(theme: RidgeTheme, systemDark: Boolean) =
     if (theme == RidgeTheme.AUTO) (if (systemDark) RidgeTheme.MIDNIGHT else RidgeTheme.DAYLIGHT) else theme
 
-/** The design's type: Roboto (system), 400 for numbers and body, 500 for titles; nothing bolder. */
+/** Geist for words and numbers, Geist Mono for axes and timers (OFL, bundled; DESIGN v2). */
+val Geist = FontFamily(
+    Font(R.font.geist_regular, FontWeight.Normal),
+    Font(R.font.geist_medium, FontWeight.Medium),
+    Font(R.font.geist_semibold, FontWeight.SemiBold),
+)
+val GeistMono = FontFamily(Font(R.font.geist_mono_regular, FontWeight.Normal), Font(R.font.geist_mono_medium, FontWeight.Medium))
+
+/** Tabular figures: Geist's digits are proportional by default, and numbers mustn't jiggle as they change. */
+private const val TNUM = "tnum"
+
+/** The type scale: Geist, 400 for body, 500 for titles and hero numbers; tight tracking on big figures. */
 object RidgeType {
-    val topTitle = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.2).sp)
-    val topSubtitle = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
-    val headline = TextStyle(fontSize = 56.sp, lineHeight = 60.sp, fontWeight = FontWeight.Normal, letterSpacing = (-2).sp)
-    val setupTitle = TextStyle(fontSize = 36.sp, lineHeight = 44.sp, fontWeight = FontWeight.Normal)
-    val bigNumber = TextStyle(fontSize = 48.sp, lineHeight = 52.sp, fontWeight = FontWeight.Normal)
-    val cardNumber = TextStyle(fontSize = 36.sp, lineHeight = 40.sp, fontWeight = FontWeight.Normal)
-    val rowValue = TextStyle(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
-    val sideValue = TextStyle(fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.Normal)
-    val sheetTitle = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Medium)
-    val cardTitle = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
-    val rowTitle = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
-    val label = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
-    val body = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal)
-    val paragraph = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal)
-    val section = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
-    val caption = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
-    val change = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
-    val unit = TextStyle(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp)
+    val topTitle = TextStyle(fontFamily = Geist, fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.4).sp)
+    val topSubtitle = TextStyle(fontFamily = Geist, fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+    val headline = TextStyle(fontFamily = Geist, fontSize = 56.sp, lineHeight = 60.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1.7).sp, fontFeatureSettings = TNUM)
+    val setupTitle = TextStyle(fontFamily = Geist, fontSize = 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.8).sp)
+    val bigNumber = TextStyle(fontFamily = Geist, fontSize = 48.sp, lineHeight = 52.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1.4).sp, fontFeatureSettings = TNUM)
+    val cardNumber = TextStyle(fontFamily = Geist, fontSize = 36.sp, lineHeight = 40.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1).sp, fontFeatureSettings = TNUM)
+    val rowValue = TextStyle(fontFamily = Geist, fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.4).sp, fontFeatureSettings = TNUM)
+    val sideValue = TextStyle(fontFamily = Geist, fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.5).sp, fontFeatureSettings = TNUM)
+    val sheetTitle = TextStyle(fontFamily = Geist, fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.4).sp)
+    val cardTitle = TextStyle(fontFamily = Geist, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.1).sp)
+    val rowTitle = TextStyle(fontFamily = Geist, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+    val label = TextStyle(fontFamily = Geist, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+    val body = TextStyle(fontFamily = Geist, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal)
+    val paragraph = TextStyle(fontFamily = Geist, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal)
+    /** Eyebrow labels: 11 sp, uppercase by the caller, +0.08 em. */
+    val section = TextStyle(fontFamily = Geist, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.9.sp)
+    val caption = TextStyle(fontFamily = Geist, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal, fontFeatureSettings = TNUM)
+    val change = TextStyle(fontFamily = Geist, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = TNUM)
+    val unit = TextStyle(fontFamily = Geist, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
+    /** Chart axes and timers: monospaced, so labels line up. */
+    val axis = TextStyle(fontFamily = GeistMono, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Normal)
 }
 
 private val Type = Typography().let { t ->
+    fun TextStyle.geist() = copy(fontFamily = Geist)
     t.copy(
-        titleLarge = RidgeType.topTitle,
-        titleMedium = t.titleMedium.copy(fontWeight = FontWeight.Medium),
-        labelLarge = t.labelLarge.copy(fontWeight = FontWeight.Medium),
-        labelMedium = t.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+        displayLarge = t.displayLarge.geist(), displayMedium = t.displayMedium.geist(), displaySmall = t.displaySmall.geist(),
+        headlineLarge = t.headlineLarge.geist(), headlineMedium = t.headlineMedium.geist(), headlineSmall = t.headlineSmall.geist(),
+        titleLarge = RidgeType.topTitle, titleMedium = t.titleMedium.geist().copy(fontWeight = FontWeight.Medium), titleSmall = t.titleSmall.geist(),
+        bodyLarge = t.bodyLarge.geist(), bodyMedium = t.bodyMedium.geist(), bodySmall = t.bodySmall.geist(),
+        labelLarge = t.labelLarge.geist().copy(fontWeight = FontWeight.Medium),
+        labelMedium = t.labelMedium.geist().copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), labelSmall = t.labelSmall.geist(),
     )
 }
 
