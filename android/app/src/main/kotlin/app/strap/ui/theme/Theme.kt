@@ -32,6 +32,7 @@ data class MetricColors(
     val stepsTone: MetricTone,
     /** Gauge tracks, chart gridlines, empty bar tracks (`surface3`). */
     val track: Color,
+    val stages: StageColors,
 ) {
     val recovery get() = recoveryTone.accent
     val strain get() = strainTone.accent
@@ -40,6 +41,14 @@ data class MetricColors(
     val stress get() = stressTone.accent
     val steps get() = stepsTone.accent
 }
+
+/**
+ * Sleep stages, one hue each (DESIGN U2): deep and REM were two shades of one purple. Deep
+ * stays the sleep family's darkest violet, light its palest, REM moves to cyan and awake to
+ * amber, so the hypnogram reads by hue as well as by row.
+ */
+@Immutable
+data class StageColors(val deep: Color, val light: Color, val rem: Color, val awake: Color)
 
 /** The neutrals and zone colours Material's scheme has no slot for. */
 @Immutable
@@ -82,6 +91,7 @@ private val DarkMetrics = MetricColors(
     stressTone = MetricTone(Color(0xFFF5AC69), Color(0xFF4B2E11), Color(0xFFFEDEC3)),
     stepsTone = MetricTone(Color(0xFF44D4E2), Color(0xFF003E44), Color(0xFFBFEFF4)),
     track = DarkRidge.surface3,
+    stages = StageColors(deep = Color(0xFF7B66E8), light = Color(0xFFCBC0FF), rem = Color(0xFF5CC8F0), awake = Color(0xFFF2A65A)),
 )
 
 private val LightMetrics = MetricColors(
@@ -92,6 +102,7 @@ private val LightMetrics = MetricColors(
     stressTone = MetricTone(Color(0xFFA05100), Color(0xFFFEDEC3), Color(0xFF401F00)),
     stepsTone = MetricTone(Color(0xFF007E8F), Color(0xFFBFEFF4), Color(0xFF003239)),
     track = LightRidge.surface3,
+    stages = StageColors(deep = Color(0xFF3F2E91), light = Color(0xFFAE9FEE), rem = Color(0xFF1F8FBF), awake = Color(0xFFD27A1E)),
 )
 
 val LocalMetricColors = staticCompositionLocalOf { DarkMetrics }

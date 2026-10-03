@@ -74,6 +74,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -96,10 +97,10 @@ import app.strap.ui.components.InfoSheet
 import app.strap.ui.components.Infos
 import app.strap.ui.components.LocalInfo
 import app.strap.ui.components.LocalSnackbar
-import app.strap.ui.describe
 import app.strap.ui.detail.DetailMetric
 import app.strap.ui.detail.MetricDetailScreen
 import app.strap.ui.isRunning
+import app.strap.ui.syncLine
 import app.strap.ui.journal.JournalScreen
 import app.strap.ui.settings.ProfileScreen
 import app.strap.ui.settings.SettingsScreen
@@ -198,15 +199,26 @@ private fun AppShell(app: StrapApp) {
     val top = stack.lastOrNull()
     BackHandler(enabled = stack.isNotEmpty()) { stack.removeAt(stack.lastIndex) }
 
-    // A sync that ran while the app watched ends in a snackbar with its result.
+    // A sync that ran while the app watched ends in a snackbar, but quietly (DESIGN U1): an
+    // automatic one speaks only when it brought something new; one the owner asked for also
+    // says "up to date" or why it failed. An automatic failure (strap out of range) stays
+    // in the subtitle and Settings, not in the owner's face on every open.
     var watched by remember { mutableStateOf(false) }
+    var asked by remember { mutableStateOf(false) }
+    val syncNow = { asked = true; SyncService.start(app) }
     LaunchedEffect(sync) {
         if (sync.isRunning) watched = true
         val done = sync as? SyncState.Finished ?: return@LaunchedEffect
+        val byHand = asked
+        asked = false
         if (!watched) return@LaunchedEffect
         watched = false
-        val readings = app.store.lastSummary()?.optJSONObject("samples")?.let { s -> s.keys().asSequence().sumOf { s.optInt(it) } }
-        showSnack(done.failure ?: ("Synced" + (readings?.let { " · %,d new readings".format(it) } ?: "")), null, null)
+        val readings = app.store.lastSummary()?.optJSONObject("samples")?.let { s -> s.keys().asSequence().sumOf { s.optInt(it) } } ?: 0
+        when {
+            done.failure != null -> if (byHand) showSnack(done.failure, "Retry") { syncNow() }
+            readings > 0 -> showSnack("Synced · %,d new readings".format(readings), null, null)
+            byHand -> showSnack("Up to date", null, null)
+        }
     }
 
     // Today's data is shared by Today and Recovery; it reloads when a sync finishes.
@@ -244,7 +256,7 @@ private fun AppShell(app: StrapApp) {
     val running = sync.isRunning
     val synced = lastSync?.let { "synced " + clock(it) }
     val subtitle = when {
-        running -> describe(sync)
+        running -> syncLine(sync)
         top == Pushed.Recovery || top is Pushed.Detail -> if (top is Pushed.Detail && day == LocalDate.now()) null else day.format(SHORT_DATE)
         top != null -> null
         tab == Tab.TODAY -> day.format(SHORT_DATE) + (synced?.let { " · $it" } ?: "")
@@ -283,7 +295,7 @@ private fun AppShell(app: StrapApp) {
                                 Text(title, style = RidgeType.topTitle)
                                 subtitle?.let {
                                     Text(it, style = RidgeType.topSubtitle, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.clickable(enabled = !running && top == null) { SyncService.start(app) })
+                                        modifier = Modifier.clickable(enabled = !running && top == null) { syncNow() })
                                 }
                             }
                         },
@@ -351,7 +363,7 @@ private fun AppShell(app: StrapApp) {
                     top == Pushed.Profile -> ProfileScreen(api)
                     top is Pushed.Detail -> MetricDetailScreen(api, top.metric, day)
                     top == Pushed.Recovery -> today?.takeIf { it.day == day }?.let { RecoveryContent(it) { d -> day = d } } ?: Loading(todayError)
-                    else -> Refreshable(running, onRefresh = { SyncService.start(app) }) {
+                    else -> Refreshable(running && asked, onRefresh = { syncNow() }) {
                         when (tab) {
                             Tab.TODAY -> today?.takeIf { it.day == day }?.let { TodayContent(it, nav) } ?: Loading(todayError)
                             Tab.SLEEP -> SleepScreen(api, sync is SyncState.Finished)
@@ -380,19 +392,20 @@ private fun FullScreen(content: @Composable () -> Unit) {
 /** The 4 dp sync progress line under the top bar; its width follows the sync over 0.6 s. */
 @Composable
 private fun SyncBar(progress: Float?) {
-    val width by animateFloatAsState(progress ?: 0f, tween(600), label = "sync")
-    Box(Modifier.fillMaxWidth().height(4.dp).padding(horizontal = 16.dp)) {
-        if (progress != null) {
-            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)).background(LocalRidgeColors.current.surface3))
-            Box(Modifier.fillMaxWidth(width).height(4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
-        }
+    // A 2 dp hairline under the top bar: present enough to say "working", never a banner.
+    val width by animateFloatAsState(progress ?: 1f, tween(600), label = "sync")
+    val shown by animateFloatAsState(if (progress != null) 1f else 0f, tween(300), label = "syncShown")
+    Box(Modifier.fillMaxWidth().height(2.dp).padding(horizontal = 16.dp).graphicsLayer { alpha = shown }) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(1.dp)).background(LocalRidgeColors.current.surface3))
+        Box(Modifier.fillMaxWidth(width).height(2.dp).clip(RoundedCornerShape(1.dp)).background(MaterialTheme.colorScheme.primary))
     }
 }
 
 /**
  * Pull to refresh on the tabs: past 64 dp a release starts a sync. The indicator is a 48 dp
- * circle whose arrow turns with the pull and flips at the threshold; while a sync runs it
- * rests 12 dp from the top with a spinner.
+ * circle whose arrow turns with the pull and flips at the threshold; while the sync it started
+ * runs it rests 12 dp from the top with a spinner. An automatic sync
+ * never shows it: that one is only the hairline under the top bar (DESIGN U1).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

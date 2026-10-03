@@ -178,7 +178,7 @@ private fun needLabel(minutes: Double): String {
 @Composable
 private fun StageTiles(minutes: JSONObject) {
     val c = LocalMetricColors.current
-    val shades = stageShades(c.sleep, c.stress, MaterialTheme.colorScheme.onSurface)
+    val shades = stageShades(c.stages)
     val parts = listOf(Triple("Deep", "deep", 5), Triple("Light", "light", 4), Triple("REM", "rem", 8), Triple("Awake", "awake", 7))
         .map { (label, key, code) -> Triple(label, if (minutes.isNull(key)) 0.0 else minutes.getDouble(key), shades.getValue(code)) }
     val total = parts.sumOf { it.second }.takeIf { it > 0 } ?: return

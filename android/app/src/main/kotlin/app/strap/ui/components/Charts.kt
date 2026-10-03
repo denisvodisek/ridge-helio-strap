@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Dp
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
+import app.strap.ui.theme.StageColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -220,7 +220,7 @@ fun Hypnogram(stages: List<Triple<Long, Long, Int>>, modifier: Modifier = Modifi
     val c = LocalMetricColors.current
     // strap stage codes: 7 awake, 8 REM, 4 light, 5 deep
     val rows = listOf(7 to "Awake", 8 to "REM", 4 to "Light", 5 to "Deep")
-    val shades = stageShades(c.sleep, c.stress, MaterialTheme.colorScheme.onSurface)
+    val shades = stageShades(c.stages)
     val box = LocalRidgeColors.current.surface3
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth()) {
@@ -256,8 +256,8 @@ fun Hypnogram(stages: List<Triple<Long, Long, Int>>, modifier: Modifier = Modifi
 }
 
 /** Stage colours, shared by the hypnogram and its legend tiles. */
-fun stageShades(sleep: Color, awake: Color, onSurface: Color): Map<Int, Color> =
-    mapOf(7 to awake, 8 to lerp(sleep, onSurface, 0.25f), 4 to sleep.copy(alpha = 0.5f), 5 to sleep)
+fun stageShades(stages: StageColors): Map<Int, Color> =
+    mapOf(7 to stages.awake, 8 to stages.rem, 4 to stages.light, 5 to stages.deep)
 
 /** Hour labels centred under 00/06/12/18/24, clamped inside the chart's edges. */
 @Composable

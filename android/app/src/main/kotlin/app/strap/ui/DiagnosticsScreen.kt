@@ -164,6 +164,14 @@ internal fun describe(state: SyncState): String = when (state) {
     is SyncState.Finished -> state.failure ?: "Sync complete."
 }
 
+/** The top bar's one line while a sync runs: what the owner would want to know, not the step log. */
+internal fun syncLine(state: SyncState): String = when (state) {
+    SyncState.Connecting -> "Finding your strap…"
+    is SyncState.Running -> "Syncing · %d%%".format(((syncProgress(state) ?: 0f) * 100).toInt())
+    is SyncState.Uploading -> "Saving to your server…"
+    else -> describe(state)
+}
+
 internal val SyncState.isRunning: Boolean get() = this !is SyncState.Idle && this !is SyncState.Finished
 
 /** How far a running sync is, 0..1; null when none runs. */
