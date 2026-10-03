@@ -154,6 +154,32 @@ Baselines need history, so the app fills in over time:
 
 Opening the app syncs (at most every 15 min); pull down on any tab to sync right now.
 
+## 8 · Talk to your data in Claude (MCP)
+
+The server ships a read-only MCP server (`strap_server/mcp_server.py`): typed tools over the
+same read code the app uses (`metrics`, `day_summary`, `daily`, `samples`, `workouts`,
+`journal_entries`, `owner_profile`) plus a guarded `query` for one read-only SQL statement.
+It runs inside the API container over stdio, so the database never opens a port.
+
+Claude Code (on the Mac running the server):
+
+```bash
+claude mcp add ridge -- docker compose -f ~/Development/ridge-helio-strap/deploy/compose.yaml exec -T api python -m strap_server.mcp_server
+```
+
+Claude Desktop: Settings → Developer → Edit config, then add under `mcpServers`:
+
+```json
+"ridge": {"command": "docker", "args": ["compose", "-f", "/Users/denis/Development/ridge-helio-strap/deploy/compose.yaml", "exec", "-T", "api", "python", "-m", "strap_server.mcp_server"]}
+```
+
+Once the server lives on the droplet, the same command runs over SSH:
+`ssh droplet "cd ridge-helio-strap/deploy && docker compose exec -T api python -m strap_server.mcp_server"`.
+
+Ask things like "how did my HRV trend over the last month?" or "compare my sleep on days I
+logged alcohol". Query results are sent to Anthropic with each question; the database itself
+stays on your box.
+
 ## Updating the server
 
 ```sh

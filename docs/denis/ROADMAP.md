@@ -99,7 +99,7 @@ S = a session or two · M = a few sessions · L = a project in itself.
    bed, sauna, cold exposure, supplements, mood, energy and soreness (1–5), travel,
    meditation. `manual_entry` already has duration, severity and notes, so no migration
    is needed.
-6. **Talk to your data: MCP server** (S). A small read-only MCP server over the Ridge
+6. ✅ **Talk to your data: MCP server** (S, done 2026-10-03; SETUP §8). A small read-only MCP server over the Ridge
    database (a read-only Postgres role, typed tools like `daily(metric, from, to)`,
    `day_summary(day)`, `workouts(range)`, `journal(range)`, plus guarded read-only SQL).
    You can then ask Claude Desktop or Claude Code anything about your data. It's the

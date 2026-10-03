@@ -29,6 +29,7 @@ server/                   Python 3.13, FastAPI, psycopg3, TimescaleDB
   src/strap_server/ingest/   validate + upsert what the phone sends
   src/strap_server/derive/   the science, one module per metric family, ordered by orchestrator.py
   src/strap_server/read/     read API: series, day summary (the cards), history
+  src/strap_server/mcp_server.py  read-only MCP tools over the same read code (ours, SETUP §8)
   src/strap_server/migrations/  schema; applied on every start
 deploy/                   Docker Compose: db + api + nightly backup
 tools/keyfetch/           One-shot Zepp account → strap MAC + auth key
