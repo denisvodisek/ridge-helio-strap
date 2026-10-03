@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,7 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -159,12 +162,20 @@ fun NoteLine(note: Note?, modifier: Modifier = Modifier) {
     Text(note?.text ?: " ", style = RidgeType.change, color = note?.color ?: Color.Unspecified, modifier = modifier, textAlign = TextAlign.Center)
 }
 
-/** A hero's side figure: value 24/400, label 11/500 uppercase, then its note. */
+/**
+ * How much a hero row is scaled down to fit (1 on a regular phone, ~0.89 on a foldable's
+ * 343 dp cover screen). Set by [HeroRow]; read by [HeroGauge] and [SideStat].
+ */
+val LocalHeroScale = compositionLocalOf { 1f }
+
+/** A hero's side figure: value 24/500 (never wraps), label 11/500 uppercase, then its note. */
 @Composable
 fun SideStat(value: String, label: String, note: Note?, modifier: Modifier = Modifier) {
+    val k = LocalHeroScale.current
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(value, style = RidgeType.sideValue)
-        Text(label.uppercase(), style = RidgeType.change.copy(letterSpacing = 0.8.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        Text(value, style = RidgeType.sideValue.copy(fontSize = RidgeType.sideValue.fontSize * k), maxLines = 1, softWrap = false)
+        Text(label.uppercase(), style = RidgeType.change.copy(letterSpacing = (0.8f * k).sp, fontSize = RidgeType.change.fontSize * k),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         NoteLine(note)
     }
 }
@@ -176,17 +187,26 @@ fun HeroRow(
     right: @Composable (Modifier) -> Unit,
     gauge: @Composable () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-        left(Modifier.weight(1f).padding(bottom = 36.dp))
-        gauge()
-        right(Modifier.weight(1f).padding(bottom = 36.dp))
+    // 168 dp gauge + two ~90 dp sides is 348 dp; narrower screens scale the whole row down
+    // together rather than squeezing the sides until their words break mid-letter.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val k = ((maxWidth - 24.dp) / 348.dp).coerceIn(0.75f, 1f)
+        CompositionLocalProvider(LocalHeroScale provides k) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                left(Modifier.weight(1f).padding(bottom = 36.dp))
+                gauge()
+                right(Modifier.weight(1f).padding(bottom = 36.dp))
+            }
+        }
     }
 }
 
 /** The standard hero gauge: 168 dp, 38 sp value. */
 @Composable
-fun HeroGauge(value: String, unit: String?, fraction: Float?, color: Color, label: String, note: Note?, crown: Boolean = false, onClick: (() -> Unit)? = null) =
-    GaugeBlock(value, unit, fraction, color, label, note, 168.dp, 38.sp, crown = crown, onClick = onClick)
+fun HeroGauge(value: String, unit: String?, fraction: Float?, color: Color, label: String, note: Note?, crown: Boolean = false, onClick: (() -> Unit)? = null) {
+    val k = LocalHeroScale.current
+    GaugeBlock(value, unit, fraction, color, label, note, 168.dp * k, (38 * k).sp, crown = crown, onClick = onClick)
+}
 
 /**
  * The earned crown (DESIGN U10): a small gold crown that springs in above the number once the

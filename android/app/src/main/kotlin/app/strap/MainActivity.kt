@@ -83,6 +83,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -391,13 +392,18 @@ private fun AppShell(app: StrapApp) {
             floatingActionButton = {
                 // One button to start or log a workout, where you'd look for it (DESIGN: as easy as possible).
                 if (top == null && ongoing == null && (tab == Tab.TODAY || tab == Tab.ACTIVITY)) {
+                    // Icon only on a narrow screen (a foldable's cover display), where a labelled
+                    // button would sit on top of half a card.
+                    val narrow = LocalConfiguration.current.screenWidthDp < 380
                     ExtendedFloatingActionButton(
                         onClick = { workoutSheet = true },
-                        icon = { Icon(RidgeIcons.workout, null) },
+                        expanded = !narrow,
+                        icon = { Icon(RidgeIcons.workout, "Workout") },
                         text = { Text("Workout", style = RidgeType.cardTitle) },
                         shape = RoundedCornerShape(20.dp),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.height(64.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.height(if (narrow) 56.dp else 64.dp),
                     )
                 }
             },

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,19 +42,20 @@ import java.time.format.TextStyle
 @Composable
 fun WeekStrip(days: List<LocalDate>, recovery: Map<LocalDate, Double>, selected: LocalDate, onSelect: (LocalDate) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        days.forEach { d -> DayCell(d, recovery[d], d == selected) { onSelect(d) } }
+        // Each day takes an equal share up to 48 dp, so seven fit a narrow cover screen (343 dp).
+        days.forEach { d -> DayCell(d, recovery[d], d == selected, Modifier.weight(1f).widthIn(max = 48.dp)) { onSelect(d) } }
     }
 }
 
 @Composable
-private fun DayCell(day: LocalDate, recovery: Double?, selected: Boolean, onClick: () -> Unit) {
+private fun DayCell(day: LocalDate, recovery: Double?, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val r = LocalRidgeColors.current
     val arc = LocalMetricColors.current.recovery
     val bg by animateColorAsState(if (selected) r.surface3 else Color.Transparent, tween(200))
     val locale = LocalLocale.current.platformLocale
     val letter = day.dayOfWeek.getDisplayName(TextStyle.NARROW, locale)
     Column(
-        Modifier.width(48.dp).clip(RoundedCornerShape(24.dp)).background(bg).clickable(onClick = onClick).padding(vertical = 8.dp)
+        modifier.clip(RoundedCornerShape(24.dp)).background(bg).clickable(onClick = onClick).padding(vertical = 8.dp)
             .semantics {
                 this.selected = selected
                 contentDescription = day.dayOfWeek.getDisplayName(TextStyle.FULL, locale) + " ${day.dayOfMonth}" +
@@ -64,7 +65,7 @@ private fun DayCell(day: LocalDate, recovery: Double?, selected: Boolean, onClic
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(letter, style = RidgeType.change, color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
-        Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).widthIn(max = 34.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(34.dp)) {
                 // r 14.5, stroke 3 in a 34-unit box
                 val s = size.minDimension / 34f

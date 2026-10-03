@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -98,26 +99,35 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier, 
             val strainLearning = data.strain.learning
             val recoveryLearning = data.recovery.learning
             val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            // The three dials share the width: 150/96 dp on a regular phone, smaller on a narrow
+            // cover screen (a Find N3's is 343 dp), with their numbers scaled to match.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val room = maxWidth - 24.dp // the three blocks' own 4 dp padding each side
+            val big = minOf(150.dp, room * 0.42f)
+            val small = minOf(96.dp, room * 0.27f)
+            val bigSp = (42 * big.value / 150).sp
+            val smallSp = (24 * small.value / 96).sp
             Row(Modifier.fillMaxWidth().padding(top = 8.dp).stagger(entrance, 1), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 if (strainLearning != null) {
                     GaugeBlock("${strainLearning.first}/${strainLearning.second}", "days", strainLearning.first / strainLearning.second.toFloat(),
-                        c.strain.copy(alpha = 0.45f), "Strain", Note("learning", muted), 96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
+                        c.strain.copy(alpha = 0.45f), "Strain", Note("learning", muted), small, smallSp, stroke = 8f, onClick = nav.activity)
                 } else {
                     GaugeBlock(strain?.let { "%.1f".format(it) } ?: "—", "of 21", strain?.let { (it / 21).toFloat() }, c.strain, "Strain", null,
-                        96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
+                        small, smallSp, stroke = 8f, onClick = nav.activity)
                 }
                 if (recoveryLearning != null) {
                     GaugeBlock("${recoveryLearning.first}/${recoveryLearning.second}", "nights", recoveryLearning.first / recoveryLearning.second.toFloat(),
-                        c.recovery.copy(alpha = 0.45f), "Recovery", Note("learning your baseline", muted), 150.dp, 42.sp, onClick = nav.recovery)
+                        c.recovery.copy(alpha = 0.45f), "Recovery", Note("learning your baseline", muted), big, bigSp, onClick = nav.recovery)
                 } else {
                     GaugeBlock(recovery?.let { "${it.roundToInt()}%" } ?: "—", "ready", recovery?.let { (it / 100).toFloat() },
                         recovery?.let(r::zone) ?: c.recovery, "Recovery",
                         changeNote(recovery?.let { v -> data.recoveryWeekBefore(data.day)?.let { v - it } }, "vs week"),
-                        150.dp, 42.sp, crown = recovery != null && recovery >= CROWN_AT, onClick = nav.recovery)
+                        big, bigSp, crown = recovery != null && recovery >= CROWN_AT, onClick = nav.recovery)
                 }
                 // The strap's own 0-100 score, named as the strap's (we compute no composite sleep score).
                 GaugeBlock(score?.toString() ?: "—", "Amazfit", score?.let { it / 100f }, c.sleep, "Sleep", null,
-                    96.dp, 24.sp, stroke = 8f, onClick = nav.sleep)
+                    small, smallSp, stroke = 8f, onClick = nav.sleep)
+            }
             }
         }
         item { Box(Modifier.stagger(entrance, 2)) { RecoveryCard(data, nav.recovery) } }
