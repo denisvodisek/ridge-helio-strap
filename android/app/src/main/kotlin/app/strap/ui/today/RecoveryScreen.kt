@@ -70,7 +70,7 @@ fun RecoveryContent(data: TodayData, onSelectDay: (LocalDate) -> Unit) {
                     BaselineRows(data.factors.map { f ->
                         {
                             BaselineRow(FACTOR_LABELS.getValue(f.key), factorUsual(f), factorValue(f), factorTrackOf(f),
-                                chip = "weight ${(f.weight * 100).roundToInt()}%", footer = factorUsual(f) to "part score ${f.sub}")
+                                chip = "weight ${(f.weight * 100).roundToInt()}%", footer = factorUsual(f) to "part score ${f.sub}", status = f.label)
                         }
                     })
                 }

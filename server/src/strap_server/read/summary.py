@@ -164,12 +164,40 @@ def steps_usual_by(cur: Cursor, user_id: UUID, tz: str, day: date, until: time) 
 # ── cards ─────────────────────────────────────────────────────────────────────
 
 
+# docs/denis/SPEC.md S1: (better above, watch below) on the favourable-direction z. HRV and RHR
+# from spec/02 §2.8; RR mirrors RHR (ours).
+FACTOR_Z_BANDS = {"hrv": (0.3, -0.5), "rhr": (0.3, -0.5), "rr": (0.3, -0.5)}
+FACTOR_LOWER_IS_BETTER = {"rhr", "rr"}
+
+
+def factor_state(key: str, factor: dict) -> dict | None:
+    """One recovery factor's plain-word state (SPEC S1), or None when its inputs are missing."""
+    if key == "sleep":
+        tst, need = factor.get("tst_min"), factor.get("need_min")
+        if tst is None or need is None:
+            return None
+        short = round(need - tst)
+        return {"state": "better", "label": "Need met"} if short <= 0 else {"state": "short", "label": f"{short} min short"}
+    z = factor.get("z")
+    if z is None or key not in FACTOR_Z_BANDS:
+        return None
+    good = -z if key in FACTOR_LOWER_IS_BETTER else z
+    better, watch = FACTOR_Z_BANDS[key]
+    state = "better" if good > better else "watch" if good < watch else "typical"
+    if state == "typical":
+        return {"state": state, "label": "Typical"}
+    # The direction in words, the verdict in the state: watch is ~31 % of ordinary days (SPEC S1).
+    above = (state == "better") != (key in FACTOR_LOWER_IS_BETTER)
+    return {"state": state, "label": "Above usual" if above else "Below usual"}
+
+
 def recovery_card(cur: Cursor, user_id: UUID, day: date, today: date) -> dict:
     row = _row(cur, user_id, day, "recovery_score")
     if row is None:
         return withheld(freshness.NOT_DERIVED_YET)
     score, flags = int(row[0]), row[1]
-    card: dict = {"value": score, "flags": flags, "readiness": None}
+    states = {k: st for k, f in (flags.get("factors") or {}).items() if (st := factor_state(k, f))}
+    card: dict = {"value": score, "flags": flags, "readiness": None, "factor_states": states}
     load = _row(cur, user_id, day, "cardio_load")
     hist = _history(cur, user_id, day, "cardio_load", 30)
     if day == today and load and len(hist) >= 5:  # only the reference day's own recovery decays

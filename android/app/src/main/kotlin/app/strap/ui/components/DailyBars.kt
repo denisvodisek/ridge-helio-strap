@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,9 +15,9 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.MaterialTheme
 import app.strap.ui.theme.LocalRidgeColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -25,7 +26,8 @@ import java.time.format.DateTimeFormatter
  * One bar per day over [first, last]; days with no value draw nothing (a gap, never zero).
  * [target] draws a dashed reference line (e.g. sleep need); [dim] fades bars that miss it.
  * [highlightLast] draws the latest day at full strength and the rest at half. [format]
- * renders the scrub readout, or [onScrub] receives the day instead.
+ * renders the scrub readout, or [onScrub] receives the day instead. [axis] adds labelled value
+ * gridlines: on for a detail screen's chart, off for a card's (static, no labels; DESIGN U3).
  */
 @Composable
 fun DailyBars(
@@ -39,11 +41,13 @@ fun DailyBars(
     dim: ((Double) -> Boolean)? = null,
     highlightLast: Boolean = false,
     height: Dp = 120.dp,
+    axis: Boolean = false,
     onScrub: ((LocalDate?) -> Unit)? = null,
 ) {
     val days = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(last) }.toList()
     val grid = LocalRidgeColors.current.surface3
     val dash = MaterialTheme.colorScheme.onSurfaceVariant
+    val labels = rememberTextMeasurer()
     var scrub by remember { mutableStateOf<Float?>(null) }
     fun dayAt(f: Float) = days[(f * days.size).toInt().coerceIn(0, days.lastIndex)]
     val selected = scrub?.let(::dayAt)
@@ -56,7 +60,9 @@ fun DailyBars(
                 val slot = size.width / days.size
                 val w = minOf(slot * 0.78f, 28.dp.toPx())
                 val effect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+                val ticks = if (axis && values.isNotEmpty()) valueTicks(labels, 0.0, max, dash) { size.height - (it / max).toFloat() * size.height } else emptyList()
                 onDrawBehind {
+                    valueGrid(ticks, grid)
                     days.forEachIndexed { i, d ->
                         val v = values[d] ?: return@forEachIndexed
                         val h = (v / max).toFloat() * size.height

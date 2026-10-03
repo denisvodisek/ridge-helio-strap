@@ -2,6 +2,7 @@ package app.strap.sync
 
 import android.Manifest
 import android.content.pm.PackageManager
+import app.strap.BuildConfig
 import app.strap.StrapApp
 import app.strap.ui.isRunning
 import java.time.Duration
@@ -17,6 +18,8 @@ object AutoSync {
     val COOLDOWN: Duration = Duration.ofMinutes(15)
 
     fun onAppVisible(app: StrapApp, now: Instant = Instant.now()) {
+        // The demo build has no strap to reach; a connect on every open only stalls UI work.
+        if (BuildConfig.BUILD_TYPE == "demo") return
         if (app.syncRunner.state.value.isRunning) return
         // Setup runs its own first sync; until both halves exist there is nothing to sync to.
         if (app.vault.load() == null || app.vault.loadServer() == null) return

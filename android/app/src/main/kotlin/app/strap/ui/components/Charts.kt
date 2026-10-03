@@ -29,11 +29,18 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.strap.ui.theme.LocalMetricColors
@@ -107,14 +114,25 @@ fun DayLineChart(
     val dayEnd = dayStart + 24 * 3_600_000L
     val grid = LocalRidgeColors.current.surface3
     val sleepShade = LocalMetricColors.current.sleepTone.container.copy(alpha = 0.55f)
+    val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    val labels = rememberTextMeasurer()
+    val haptics = LocalHapticFeedback.current
     var scrub by remember { mutableStateOf<Float?>(null) }
+    var lastHour by remember { mutableStateOf(-1) }
     val selected = scrub?.let { f -> nearest(points, dayStart + ((dayEnd - dayStart) * f).toLong(), maxGapMs) }
+    // Today's chart stops at now: the hours still to come are a faded "not yet", not blank
+    // space that reads like missing data (DESIGN U3).
+    val now = System.currentTimeMillis().takeIf { it in dayStart until dayEnd }
     Column(modifier) {
         if (onScrub == null) ValueLabels(selected?.let { "${clockOf(it.t)} · ${it.v.roundToInt()} $unit" }, points.maxOfOrNull { it.v }, points.minOfOrNull { it.v })
         // drawWithCache: the path is built once per size/data change, not on every frame.
         Spacer(
             Modifier.fillMaxWidth().height(height).scrub { f ->
                 scrub = f
+                // One light tick per hour crossed while scrubbing: the finger feels the axis.
+                val hour = f?.let { (it * 24).toInt() } ?: -1
+                if (hour >= 0 && lastHour >= 0 && hour != lastHour) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                lastHour = hour
                 onScrub?.invoke(f?.let { nearest(points, dayStart + ((dayEnd - dayStart) * it).toLong(), maxGapMs) })
             }.drawWithCache {
                 val lo = (points.minOfOrNull { it.v } ?: 0.0) - 5
@@ -132,9 +150,17 @@ fun DayLineChart(
                 val gridX = listOf(6, 12, 18).map { x(dayStart + it * 3_600_000L) }
                 val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                 val sel = selected?.let { Offset(x(it.t), y(it.v)) }
+                val ticks = if (points.isEmpty()) emptyList() else valueTicks(labels, lo, hi, faint, ::y)
+                val nowX = now?.let { x(it) }
                 onDrawBehind {
+                    nowX?.let { nx ->
+                        drawRoundRect(grid.copy(alpha = 0.45f), Offset(nx, 0f), Size(size.width - nx, size.height), CornerRadius(6.dp.toPx()))
+                        drawLine(faint.copy(alpha = 0.6f), Offset(nx, 0f), Offset(nx, size.height), 1.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
+                    }
                     for ((l, r) in shades) drawRoundRect(sleepShade, Offset(l, 0f), Size(r - l, size.height), CornerRadius(6.dp.toPx()))
                     for (gx in gridX) drawLine(grid, Offset(gx, 0f), Offset(gx, size.height), 1.dp.toPx())
+                    valueGrid(ticks, grid)
                     drawPath(path, color, style = stroke)
                     if (sel == null) peak?.let { drawCircle(color, 6.dp.toPx(), it) }
                     sel?.let {
@@ -146,6 +172,32 @@ fun DayLineChart(
         )
         HourAxis()
     }
+}
+
+/** Measured labels for [niceTicks] in [lo, hi], each at its y. Build inside drawWithCache. */
+internal fun valueTicks(measurer: TextMeasurer, lo: Double, hi: Double, color: Color, y: (Double) -> Float): List<Pair<Float, TextLayoutResult>> =
+    niceTicks(lo, hi).map { v -> y(v) to measurer.measure(v.roundToInt().toString(), RidgeType.caption.copy(color = color)) }
+
+/** Faint dashed value gridlines, each labelled at the right edge: what gives a detail chart its scale (DESIGN U3). */
+internal fun DrawScope.valueGrid(ticks: List<Pair<Float, TextLayoutResult>>, grid: Color) {
+    for ((gy, text) in ticks) {
+        drawLine(grid, Offset(0f, gy), Offset(size.width, gy), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx())))
+        drawText(text, topLeft = Offset(size.width - text.size.width - 2.dp.toPx(), gy - text.size.height - 1.dp.toPx()))
+    }
+}
+
+/**
+ * Two or three round values inside [lo, hi] for value gridlines (step 1, 2, 2.5 or 5 × 10ⁿ),
+ * so a chart's scale reads at a glance: 40 · 80 · 120 bpm, never 37 · 74 · 111.
+ */
+internal fun niceTicks(lo: Double, hi: Double): List<Double> {
+    val span = hi - lo
+    if (span <= 0 || span.isNaN()) return emptyList()
+    val raw = span / 3
+    val mag = Math.pow(10.0, kotlin.math.floor(kotlin.math.log10(raw)))
+    val step = listOf(1.0, 2.0, 2.5, 5.0, 10.0).map { it * mag }.first { it >= raw }
+    val first = kotlin.math.ceil(lo / step) * step
+    return generateSequence(first) { it + step }.takeWhile { it <= hi }.toList().takeLast(3)
 }
 
 /** The reading nearest to [t], unless the nearest one is further away than a gap. */

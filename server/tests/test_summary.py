@@ -14,6 +14,7 @@ from strap_server.read.summary import (
     _usual_mean,
     day_summary,
     decayed_readiness,
+    factor_state,
     steps_usual_by,
     strain_from_load,
 )
@@ -36,6 +37,22 @@ def test_strain_is_21_at_the_personal_p95_and_concave_below() -> None:
     assert strain_from_load(50, 100) == 12.5  # 21 x 0.5^0.75 = 12.487
     assert strain_from_load(300, 100) == 21.0  # capped
     assert strain_from_load(50, None) is None
+
+
+def test_contributor_states_follow_spec_2_8_thresholds() -> None:
+    # HRV: favourable above +0.3 z, unfavourable below -0.5 z (spec/02 §2.8).
+    assert factor_state("hrv", {"z": 0.31})["state"] == "better"
+    assert factor_state("hrv", {"z": 0.3})["state"] == "typical"
+    assert factor_state("hrv", {"z": -0.51}) == {"state": "watch", "label": "Below usual"}
+    assert factor_state("hrv", {"z": 0.31})["label"] == "Above usual"
+    # RHR and RR mirrored: a higher value is the unfavourable direction.
+    assert factor_state("rhr", {"z": 0.6}) == {"state": "watch", "label": "Above usual"}
+    assert factor_state("rhr", {"z": -0.4}) == {"state": "better", "label": "Below usual"}
+    assert factor_state("rr", {"z": 0.0})["label"] == "Typical"
+    # Sleep: factual against the need, no threshold.
+    assert factor_state("sleep", {"tst_min": 443, "need_min": 480}) == {"state": "short", "label": "37 min short"}
+    assert factor_state("sleep", {"tst_min": 490, "need_min": 480})["label"] == "Need met"
+    assert factor_state("hrv", {"z": None}) is None
 
 
 def test_readiness_decays_at_most_by_half() -> None:
@@ -76,6 +93,7 @@ def test_cards_carry_the_derived_numbers(seeded) -> None:
     iso = day.isoformat()
     assert out["recovery"]["value"] == round(_golden(iso, "recovery_score"))
     assert out["recovery"]["flags"]["method"] == "evidence_weighted_personal_baseline"
+    assert set(out["recovery"]["factor_states"]) == set(out["recovery"]["flags"]["factors"])
     assert out["steps"]["steps"]["value"] == round(_golden(iso, "steps_total"))
     assert out["strain"]["cardio_load"] == round(_golden(iso, "cardio_load"), 1)
     assert 0 < out["strain"]["value"] <= 21

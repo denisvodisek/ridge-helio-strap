@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.strap.ui.theme.LocalRidgeColors
@@ -29,9 +30,11 @@ import kotlin.math.max
 
 /**
  * Where a value sits against its usual: [usual] (the tick), an optional usual range [low]–[high]
- * (the band), and whether the value counts as inside it (green dot) or outside (yellow).
+ * (the band), and whether the value counts as inside it. [state], when the server sent one
+ * (SPEC S1), colours the dot instead: green better, neutral typical, amber watch or short. The
+ * inside/outside fallback alone painted a much better than usual HRV in the warning colour.
  */
-data class Track(val value: Double, val usual: Double, val low: Double?, val high: Double?, val inside: Boolean)
+data class Track(val value: Double, val usual: Double, val low: Double?, val high: Double?, val inside: Boolean, val state: String? = null)
 
 /**
  * A recovery factor as the server reports it: value, baseline median and z. The usual range
@@ -51,11 +54,16 @@ fun BaselineRow(
     track: Track?,
     chip: String? = null,
     footer: Pair<String, String>? = null,
+    status: String? = null,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = RidgeType.label, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(label, style = RidgeType.label)
+                // The plain-word verdict under the name: the dot's colour is never the only signal.
+                status?.let { Text(it, style = RidgeType.caption, color = stateColor(track?.state) ?: muted) }
+            }
             if (chip != null) {
                 Text(chip, style = RidgeType.caption, color = muted,
                     modifier = Modifier.border(1.dp, LocalRidgeColors.current.surface4, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
@@ -69,6 +77,14 @@ fun BaselineRow(
             Row { Text(l, style = RidgeType.caption, color = muted, modifier = Modifier.weight(1f)); Text(r, style = RidgeType.caption, color = muted) }
         }
     }
+}
+
+/** The colour a server state is drawn in: green better, amber watch or short; typical stays neutral (null). */
+@Composable
+internal fun stateColor(state: String?): Color? = when (state) {
+    "better" -> LocalRidgeColors.current.zoneGreen
+    "watch", "short" -> LocalRidgeColors.current.zoneYellow
+    else -> null
 }
 
 /** Rows separated by 1 dp hairlines. */
@@ -85,7 +101,7 @@ private fun TrackLine(t: Track) {
     val r = LocalRidgeColors.current
     val card = r.card
     val tickColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val dot = if (t.inside) r.zoneGreen else r.zoneYellow
+    val dot = stateColor(t.state) ?: if (t.state == "typical") tickColor else if (t.inside) r.zoneGreen else r.zoneYellow
     Spacer(
         Modifier.fillMaxWidth().height(14.dp).drawWithCache {
             // Centre the usual value; half-width covers the value and the band with room to spare.

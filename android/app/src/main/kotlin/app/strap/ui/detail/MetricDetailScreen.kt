@@ -120,7 +120,7 @@ fun MetricDetailScreen(api: ApiClient, metric: DetailMetric, day: LocalDate) {
                             Headline(at, "${it.min.roundToInt()}–${it.max.roundToInt()}", "average ${it.mean.roundToInt()} · peak at ${clockOf(it.tMax)}")
                         }
                     })
-                is Loaded.Days -> DailyBars(l.days, l.from, day, metric.tone.accent, { "%,d".format(it.roundToInt()) }, height = 200.dp,
+                is Loaded.Days -> DailyBars(l.days, l.from, day, metric.tone.accent, { "%,d".format(it.roundToInt()) }, height = 200.dp, axis = true,
                     onScrub = { d -> scrubbed = d?.let { Headline(it.format(fmtDay), l.days[it]?.let { v -> "%,d".format(v.roundToInt()) } ?: "—", "") } })
             }
         }

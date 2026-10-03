@@ -26,7 +26,8 @@ data class Readiness(val value: Int, val load: Double, val typical: Double)
 
 /**
  * One part of the recovery score. [key] hrv / rhr / rr carry value, baseline and z; sleep
- * carries asleep and need minutes instead.
+ * carries asleep and need minutes instead. [state] and [label] are the server's plain-word
+ * verdict (docs/denis/SPEC.md S1: better / typical / watch / short), never computed here.
  */
 data class Factor(
     val key: String,
@@ -36,6 +37,8 @@ data class Factor(
     val sub: Int,
     val weight: Double,
     val needMin: Double?,
+    val state: String? = null,
+    val label: String? = null,
 )
 
 /** A day's raw stats for one signal (the strap's own values), and its usual up to the same clock time. */
@@ -131,11 +134,15 @@ suspend fun loadToday(api: ApiClient, day: LocalDate): TodayData = coroutineScop
     val flags = recoveryCard.optJSONObject("flags")
     val factors = flags?.optJSONObject("factors")?.let { f ->
         val weights = flags.optJSONObject("weights")
+        val states = recoveryCard.optJSONObject("factor_states")
         listOf("hrv", "rhr", "rr", "sleep").mapNotNull { key ->
             val x = f.optJSONObject(key) ?: return@mapNotNull null
             val weight = weights?.optDouble(key)?.takeIf { !it.isNaN() } ?: 0.0
-            if (key == "sleep") Factor(key, x.getDouble("tst_min"), null, null, x.getInt("sub"), weight, x.getDouble("need_min"))
-            else Factor(key, x.getDouble("value"), x.num("baseline"), x.num("z"), x.getInt("sub"), weight, null)
+            val st = states?.optJSONObject(key)
+            val state = st?.optString("state")?.takeIf { it.isNotEmpty() }
+            val label = st?.optString("label")?.takeIf { it.isNotEmpty() }
+            if (key == "sleep") Factor(key, x.getDouble("tst_min"), null, null, x.getInt("sub"), weight, x.getDouble("need_min"), state, label)
+            else Factor(key, x.getDouble("value"), x.num("baseline"), x.num("z"), x.getInt("sub"), weight, null, state, label)
         }
     }.orEmpty()
     TodayData(

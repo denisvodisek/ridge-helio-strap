@@ -137,8 +137,8 @@ internal fun factorUsual(f: Factor): String = when {
 }
 
 internal fun factorTrackOf(f: Factor): Track? = when {
-    f.key == "sleep" -> f.needMin?.let { Track(f.value, it, null, null, inside = f.value >= it) }
-    f.baseline != null -> factorTrack(f.value, f.baseline, f.z)
+    f.key == "sleep" -> f.needMin?.let { Track(f.value, it, null, null, inside = f.value >= it, state = f.state) }
+    f.baseline != null -> factorTrack(f.value, f.baseline, f.z).copy(state = f.state)
     else -> null
 }
 
@@ -169,7 +169,7 @@ private fun RecoveryCard(data: TodayData, onOpen: () -> Unit) {
                 }
                 val week = data.recoveryWeekTo(data.day)?.let { " · week average ${it.roundToInt()}%" } ?: ""
                 Subtle("${recovery.value.roundToInt()}%$week. Each part against your last 42 days:")
-                BaselineRows(data.factors.map { f -> { BaselineRow(FACTOR_LABELS.getValue(f.key), factorUsual(f), factorValue(f), factorTrackOf(f)) } })
+                BaselineRows(data.factors.map { f -> { BaselineRow(FACTOR_LABELS.getValue(f.key), factorUsual(f), factorValue(f), factorTrackOf(f), status = f.label) } })
             }
         }
     }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +16,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.strap.ui.theme.LocalRidgeColors
@@ -45,6 +47,8 @@ fun RangeChart(
     onScrub: ((Bucket?) -> Unit)? = null,
 ) {
     val grid = LocalRidgeColors.current.surface3
+    val faint = MaterialTheme.colorScheme.onSurfaceVariant
+    val labels = rememberTextMeasurer()
     var scrub by remember { mutableStateOf<Float?>(null) }
     fun at(f: Float) = buckets.minByOrNull { kotlin.math.abs((it.t + bucketMs / 2) - (start + (end - start) * f)) }
     val selected = scrub?.let(::at)
@@ -62,8 +66,10 @@ fun RangeChart(
                 fun y(v: Double) = size.height - ((v - lo) / (hi - lo)).toFloat() * size.height
                 val slot = x(start + bucketMs) - x(start)
                 val barW = (slot * 0.6f).coerceIn(1.5f, 14.dp.toPx())
+                val ticks = if (buckets.isEmpty()) emptyList() else valueTicks(labels, lo, hi, faint, ::y)
                 onDrawBehind {
                     drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
+                    valueGrid(ticks, grid)
                     for (b in buckets) {
                         val cx = x(b.t) + slot / 2
                         val alpha = if (selected == null || selected == b) 1f else 0.35f
