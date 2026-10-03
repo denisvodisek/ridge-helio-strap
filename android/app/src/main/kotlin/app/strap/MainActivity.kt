@@ -17,6 +17,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,11 +45,13 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.Watch
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +77,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -89,6 +93,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.strap.api.ApiClient
@@ -127,6 +133,12 @@ import app.strap.ui.today.TodayContent
 import app.strap.ui.today.TodayData
 import app.strap.ui.today.TodayNav
 import app.strap.ui.today.loadToday
+import app.strap.ui.workout.OngoingBar
+import app.strap.ui.workout.SessionScreen
+import app.strap.ui.workout.Sport
+import app.strap.ui.workout.SuggestionCard
+import app.strap.ui.workout.WorkoutSheet
+import app.strap.ui.workout.durationLabel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -135,6 +147,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.min
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -169,6 +182,9 @@ private sealed interface Pushed {
     data object Diagnostics : Pushed
 
     data object Profile : Pushed
+
+    /** One workout session (the server's JSON, refreshed by the screen after an edit). */
+    data class Session(val json: JSONObject) : Pushed
 
     /** Setup in edit mode, full screen: no top bar or navigation bar. */
     data object ChangeStrap : Pushed
@@ -229,6 +245,50 @@ private fun AppShell(app: StrapApp) {
         }
     }
 
+    // Workouts (roadmap #9): the one in progress lives on the phone; saving posts the window and
+    // the server works out the rest. `sessionsVersion` reloads what lists or suggests sessions.
+    val ongoing by app.workouts.ongoing.collectAsStateWithLifecycle()
+    var workoutSheet by remember { mutableStateOf(false) }
+    var sessionsVersion by remember { mutableIntStateOf(0) }
+    val haptics = LocalHapticFeedback.current
+    fun saveSession(sport: Sport, start: Instant, end: Instant, source: String = "ridge", done: (JSONObject) -> Unit = {}) {
+        val client = api ?: return
+        scope.launch {
+            try {
+                val zone = ZoneId.systemDefault()
+                val saved = client.addSession(JSONObject().put("sport", sport.key).put("source", source)
+                    .put("start", start.atZone(zone).toOffsetDateTime().toString()).put("end", end.atZone(zone).toOffsetDateTime().toString()))
+                app.workouts.remember(sport)
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                sessionsVersion++
+                done(saved)
+                showSnack("${sport.label} saved · ${durationLabel(end.toEpochMilli() - start.toEpochMilli())}", "View") { stack.add(Pushed.Session(saved)) }
+            } catch (e: ApiException) {
+                haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                showSnack(e.message ?: "Could not save the workout.", null, null)
+            }
+        }
+    }
+    fun stopWorkout() {
+        val o = ongoing ?: return
+        val end = Instant.now()
+        if (end.toEpochMilli() - o.start.toEpochMilli() < 60_000) {
+            app.workouts.clear()
+            showSnack("Under a minute: not saved", null, null)
+            return
+        }
+        // Cleared only once the server has it: a failed save keeps the timer running to retry.
+        saveSession(o.sport, o.start, end) { app.workouts.clear() }
+    }
+    var suggestions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    LaunchedEffect(api, day, sync is SyncState.Finished, sessionsVersion) {
+        suggestions = try {
+            api?.suggestions(day)?.let { a -> List(a.length()) { a.getJSONObject(it) } }.orEmpty()
+        } catch (_: ApiException) {
+            emptyList()
+        }
+    }
+
     // Today's data is shared by Today and Recovery; it reloads when a sync finishes.
     var today by remember { mutableStateOf<TodayData?>(null) }
     var todayError by remember { mutableStateOf<String?>(null) }
@@ -277,6 +337,7 @@ private fun AppShell(app: StrapApp) {
         Pushed.Settings -> "Settings"
         Pushed.Diagnostics -> "Diagnostics"
         Pushed.Profile -> "Profile"
+        is Pushed.Session -> Sport.of(top.json.getString("sport")).label
         else -> when (tab) {
             Tab.TODAY -> dayTitle(day)
             Tab.STRAP -> "Helio Strap"
@@ -289,7 +350,7 @@ private fun AppShell(app: StrapApp) {
             containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = {
                 // Above the extended FAB on the tabs that have one.
-                val fab = top == null && (tab == Tab.JOURNAL || tab == Tab.STRAP)
+                val fab = top == null && (tab == Tab.JOURNAL || tab == Tab.STRAP || (ongoing == null && (tab == Tab.TODAY || tab == Tab.ACTIVITY)))
                 SnackbarHost(snackbar, Modifier.padding(bottom = if (fab) 80.dp else 0.dp)) { data ->
                     Snackbar(data, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(horizontal = 16.dp),
                         actionColor = MaterialTheme.colorScheme.inversePrimary)
@@ -327,6 +388,19 @@ private fun AppShell(app: StrapApp) {
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, scrolledContainerColor = MaterialTheme.colorScheme.background),
                     )
                     SyncBar(syncProgress(sync))
+                }
+            },
+            floatingActionButton = {
+                // One button to start or log a workout, where you'd look for it (DESIGN: as easy as possible).
+                if (top == null && ongoing == null && (tab == Tab.TODAY || tab == Tab.ACTIVITY)) {
+                    ExtendedFloatingActionButton(
+                        onClick = { workoutSheet = true },
+                        icon = { Icon(Icons.Rounded.FitnessCenter, null) },
+                        text = { Text("Workout", style = RidgeType.cardTitle) },
+                        shape = RoundedCornerShape(20.dp),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.height(64.dp),
+                    )
                 }
             },
             bottomBar = {
@@ -379,15 +453,44 @@ private fun AppShell(app: StrapApp) {
                     top == Pushed.Diagnostics -> DiagnosticsScreen(app)
                     api == null -> Centered("Add your server in Settings (the gear) first.")
                     top == Pushed.Profile -> ProfileScreen(api)
+                    top is Pushed.Session -> SessionScreen(api, top.json) { stack.removeAt(stack.lastIndex); sessionsVersion++ }
                     top is Pushed.Detail -> MetricDetailScreen(api, top.metric, day)
                     top == Pushed.Recovery -> today?.takeIf { it.day == day }?.let { RecoveryContent(it) { d -> day = d } } ?: Loading(todayError)
-                    else -> Refreshable(running && asked, onRefresh = { syncNow() }) {
-                        when (tab) {
-                            Tab.TODAY -> today?.takeIf { it.day == day }?.let { TodayContent(it, nav) } ?: Loading(todayError)
-                            Tab.SLEEP -> SleepScreen(api, sync is SyncState.Finished)
-                            Tab.ACTIVITY -> ActivityScreen(api, sync is SyncState.Finished)
-                            Tab.JOURNAL -> JournalScreen(api)
-                            Tab.STRAP -> StrapScreen(app, sync)
+                    else -> Column {
+                        // The workout in progress stays pinned above every tab until it's stopped.
+                        ongoing?.let { o ->
+                            OngoingBar(o, onStop = { stopWorkout() }, onCancel = {
+                                app.workouts.clear()
+                                showSnack("Workout discarded", "Undo") { app.workouts.start(o.sport, o.start) }
+                            }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                        }
+                        Refreshable(running && asked, onRefresh = { syncNow() }) {
+                            when (tab) {
+                                Tab.TODAY -> today?.takeIf { it.day == day }?.let {
+                                    TodayContent(it, nav) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            suggestions.forEach { sg ->
+                                                SuggestionCard(sg, app.workouts.recentFirst(),
+                                                    onConfirm = { sport ->
+                                                        saveSession(sport, Instant.ofEpochMilli(sg.getLong("start")), Instant.ofEpochMilli(sg.getLong("end")), "suggested")
+                                                    },
+                                                    onDismiss = {
+                                                        scope.launch {
+                                                            runCatching {
+                                                                api.dismissSuggestion(Instant.ofEpochMilli(sg.getLong("start")).atZone(ZoneId.systemDefault()).toOffsetDateTime().toString())
+                                                            }
+                                                            sessionsVersion++
+                                                        }
+                                                    })
+                                            }
+                                        }
+                                    }
+                                } ?: Loading(todayError)
+                                Tab.SLEEP -> SleepScreen(api, sync is SyncState.Finished)
+                                Tab.ACTIVITY -> key(sessionsVersion) { ActivityScreen(api, sync is SyncState.Finished) { stack.add(Pushed.Session(it)) } }
+                                Tab.JOURNAL -> JournalScreen(api)
+                                Tab.STRAP -> StrapScreen(app, sync)
+                            }
                         }
                     }
                 }
@@ -395,6 +498,16 @@ private fun AppShell(app: StrapApp) {
         }
     }
     sheet?.let { InfoSheet(it) { sheet = null } }
+    if (workoutSheet) WorkoutSheet(app.workouts, onDismiss = { workoutSheet = false },
+        onStart = { sport ->
+            workoutSheet = false
+            app.workouts.start(sport)
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        },
+        onLog = { sport, start, end ->
+            workoutSheet = false
+            saveSession(sport, start, end)
+        })
     if (picking) DayPicker(day, onDismiss = { picking = false }) { day = it; picking = false }
 }
 

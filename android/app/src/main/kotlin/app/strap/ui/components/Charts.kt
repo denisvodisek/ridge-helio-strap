@@ -110,9 +110,13 @@ fun DayLineChart(
     modifier: Modifier = Modifier,
     shaded: List<Span> = emptyList(),
     height: Dp = 140.dp,
+    spanMs: Long = 24 * 3_600_000L,
+    axis: List<String>? = null,
     onScrub: ((Point?) -> Unit)? = null,
 ) {
-    val dayEnd = dayStart + 24 * 3_600_000L
+    // [dayStart] + [spanMs] is the window drawn: a whole day by default, or one workout with
+    // its own [axis] labels (start, quarters, end).
+    val dayEnd = dayStart + spanMs
     val grid = LocalRidgeColors.current.surface3
     val sleepShade = LocalMetricColors.current.sleepTone.container.copy(alpha = 0.55f)
     val faint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -131,7 +135,8 @@ fun DayLineChart(
             Modifier.fillMaxWidth().height(height).scrub { f ->
                 scrub = f
                 // One light tick per hour crossed while scrubbing: the finger feels the axis.
-                val hour = f?.let { (it * 24).toInt() } ?: -1
+                // A tick per hour on a day; per quarter-hour on a workout-sized window.
+                val hour = f?.let { (it * spanMs / if (spanMs < 6 * 3_600_000L) 900_000.0 else 3_600_000.0).toInt() } ?: -1
                 if (hour >= 0 && lastHour >= 0 && hour != lastHour) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                 lastHour = hour
                 onScrub?.invoke(f?.let { nearest(points, dayStart + ((dayEnd - dayStart) * it).toLong(), maxGapMs) })
@@ -148,7 +153,7 @@ fun DayLineChart(
                 }
                 val peak = points.maxByOrNull { it.v }?.let { Offset(x(it.t), y(it.v)) }
                 val shades = shaded.map { s -> x(s.start.coerceAtLeast(dayStart)) to x(s.end.coerceAtMost(dayEnd)) }.filter { (l, r) -> r > l }
-                val gridX = listOf(6, 12, 18).map { x(dayStart + it * 3_600_000L) }
+                val gridX = listOf(1, 2, 3).map { x(dayStart + it * spanMs / 4) }
                 val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                 val sel = selected?.let { Offset(x(it.t), y(it.v)) }
                 val ticks = if (points.isEmpty()) emptyList() else valueTicks(labels, lo, hi, faint, ::y)
@@ -171,7 +176,7 @@ fun DayLineChart(
                 }
             },
         )
-        HourAxis()
+        if (axis != null) EvenAxis(axis) else HourAxis()
     }
 }
 

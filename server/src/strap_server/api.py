@@ -207,7 +207,8 @@ def post_session(
         return sessions.create(conn, user_id, _owner_tz(conn, user_id, settings), body)
 
 
-@app.patch("/v1/sessions/{session_id}")
+# PUT too: Android's HttpURLConnection (the app's client) cannot send PATCH.
+@app.api_route("/v1/sessions/{session_id}", methods=["PATCH", "PUT"])
 def patch_session(
     session_id: str,
     body: sessions.SessionPatch,

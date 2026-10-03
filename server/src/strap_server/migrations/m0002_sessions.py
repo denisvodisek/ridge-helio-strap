@@ -8,7 +8,7 @@ their start minute so the same "looks like a workout" isn't offered twice.
 STATEMENTS: tuple[str, ...] = (
     """CREATE TABLE session (
         id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-        sport      TEXT        NOT NULL CHECK (sport IN ('tennis', 'treadmill', 'run', 'walk', 'ride', 'gym', 'swim', 'yoga', 'other')),
+        sport      TEXT        NOT NULL CHECK (sport IN ('tennis', 'treadmill', 'stairs', 'run', 'walk', 'ride', 'gym', 'swim', 'yoga', 'other')),
         start_ts   TIMESTAMPTZ NOT NULL,
         end_ts     TIMESTAMPTZ NOT NULL CHECK (end_ts > start_ts),
         source     TEXT        NOT NULL DEFAULT 'ridge' CHECK (source IN ('ridge', 'suggested')),

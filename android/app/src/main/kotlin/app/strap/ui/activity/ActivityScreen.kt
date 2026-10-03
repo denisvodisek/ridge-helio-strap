@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,19 +48,22 @@ import app.strap.ui.components.clockOf
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
-import app.strap.ui.today.workoutLine
-import org.json.JSONArray
-import org.json.JSONObject
+import app.strap.ui.workout.Sport
+import app.strap.ui.workout.sessionLine
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import org.json.JSONArray
+import org.json.JSONObject
 
 private class ActivityData(val summary: JSONObject, val daily: JSONObject, val workouts: JSONArray)
 
+/** Workouts in the last 30 days: yours and the strap's, newest first (SPEC S3). */
+
 @Composable
-fun ActivityScreen(api: ApiClient, refreshKey: Any?) {
+fun ActivityScreen(api: ApiClient, refreshKey: Any?, onOpenSession: (JSONObject) -> Unit = {}) {
     var data by remember { mutableStateOf<ActivityData?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var days by rememberSaveable { mutableIntStateOf(7) }
@@ -71,7 +73,7 @@ fun ActivityScreen(api: ApiClient, refreshKey: Any?) {
             data = ActivityData(
                 api.summary(today),
                 api.daily("steps_total,cardio_load,mvpa_min", today.minusDays(29), today).getJSONObject("metrics"),
-                api.workouts(today.minusDays(29), today),
+                api.sessions(today.minusDays(29), today),
             )
             error = null
         } catch (e: ApiException) {
@@ -144,7 +146,7 @@ fun ActivityScreen(api: ApiClient, refreshKey: Any?) {
         }
         item { ZonesCard(strain) }
         item { GroupHeader("Workouts", trailing = "${d.workouts.length()} in 30 days") }
-        item { Workouts(d.workouts) }
+        item { Workouts(d.workouts, onOpenSession) }
         item {
             val v = d.summary.getJSONObject("vo2max")
             RidgeCard(padding = 14.dp) {
@@ -195,16 +197,17 @@ private fun ZonesCard(s: JSONObject) {
 }
 
 @Composable
-private fun Workouts(workouts: JSONArray) {
-    val tone = LocalMetricColors.current.heartTone
+private fun Workouts(workouts: JSONArray, onOpen: (JSONObject) -> Unit) {
+    val tone = LocalMetricColors.current.strainTone
     if (workouts.length() == 0) {
-        RidgeCard { Subtle("No workouts recorded by the strap in the last 30 days.") }
+        RidgeCard { Subtle("No workouts in the last 30 days. Tap Workout to start one, or confirm one Ridge spots on Today.") }
         return
     }
     val fmt = DateTimeFormatter.ofPattern("EEE d MMM")
-    Grouped((0 until minOf(workouts.length(), 8)).map { workouts.getJSONObject(it) }) { w, shape ->
+    Grouped((0 until minOf(workouts.length(), 12)).map { workouts.getJSONObject(it) }) { w, shape ->
         val day = Instant.ofEpochMilli(w.getLong("start")).atZone(ZoneId.systemDefault()).format(fmt)
-        ListRow(shape, "$day · ${clockOf(w.getLong("start"))}", workoutLine(w),
-            leading = { IconCircle(Icons.AutoMirrored.Rounded.DirectionsRun, tone.container, tone.onContainer) })
+        val sport = Sport.of(w.getString("sport"))
+        ListRow(shape, "${sport.label} · $day ${clockOf(w.getLong("start"))}", sessionLine(w), onClick = { onOpen(w) },
+            leading = { IconCircle(sport.icon, tone.container, tone.onContainer) })
     }
 }

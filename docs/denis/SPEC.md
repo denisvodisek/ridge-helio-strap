@@ -67,7 +67,7 @@ minute has no HR, or a later session starts within 2 min.
 
 Withheld reasons: `profile_or_weight_missing` (trimp, zones, strain), `no_measured_rhr`,
 `no_hr_in_window` (no HR minutes at all). Sports are a closed list: tennis, treadmill,
-run, walk, ride, gym, swim, yoga, other.
+stairs (stair-climber machine), run, walk, ride, gym, swim, yoga, other.
 
 ## S4 · Suggested sessions ("looks like a workout")
 

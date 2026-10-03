@@ -27,6 +27,22 @@ class ApiClient(private val link: ServerLink) {
 
     suspend fun addJournal(entry: JSONObject): JSONObject = JSONObject(request("POST", "/v1/journal", entry.toString()))
 
+    suspend fun sessions(from: LocalDate, to: LocalDate): JSONArray = JSONArray(request("GET", "/v1/sessions?from=$from&to=$to", null))
+
+    suspend fun addSession(session: JSONObject): JSONObject = JSONObject(request("POST", "/v1/sessions", session.toString()))
+
+    suspend fun updateSession(id: String, patch: JSONObject): JSONObject = JSONObject(request("PUT", "/v1/sessions/$id", patch.toString())) // the server takes PUT: no PATCH here
+
+    suspend fun deleteSession(id: String) {
+        request("DELETE", "/v1/sessions/$id", null)
+    }
+
+    suspend fun suggestions(day: LocalDate): JSONArray = JSONArray(request("GET", "/v1/sessions/suggestions?day=$day", null))
+
+    suspend fun dismissSuggestion(start: String) {
+        request("POST", "/v1/sessions/suggestions/dismiss", JSONObject().put("start", start).toString())
+    }
+
     suspend fun profile(): JSONObject = get("/v1/profile")
 
     suspend fun saveProfile(profile: JSONObject): JSONObject = JSONObject(request("PUT", "/v1/profile", profile.toString()))

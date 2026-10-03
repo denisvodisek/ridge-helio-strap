@@ -81,7 +81,7 @@ class TodayNav(
 
 /** Today: week strip, three gauges, the recovery card, the day's moments, stress, heart and steps. */
 @Composable
-fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) {
+fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier, extra: @Composable () -> Unit = {}) {
     val c = LocalMetricColors.current
     val r = LocalRidgeColors.current
     val recovery = data.recovery.valueOrNull
@@ -121,6 +121,9 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) 
             }
         }
         item { Box(Modifier.stagger(entrance, 2)) { RecoveryCard(data, nav.recovery) } }
+        // Workout suggestions ("looks like a workout") sit right under recovery: the day's
+        // effort, waiting for one tap.
+        item { extra() }
         item { SectionLabel("Your day", "sleep, workouts, journal") }
         item {
             val moments = moments(data, nav)

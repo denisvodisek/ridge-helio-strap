@@ -23,7 +23,7 @@ from strap_server.derive.cardio_load import _measured_rhr, _trimp_and_zones
 from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
 from strap_server.read import summary
 
-Sport = Literal["tennis", "treadmill", "run", "walk", "ride", "gym", "swim", "yoga", "other"]
+Sport = Literal["tennis", "treadmill", "stairs", "run", "walk", "ride", "gym", "swim", "yoga", "other"]
 MAX_SESSION = timedelta(hours=12)
 
 # SPEC S4 (ours): at least 40 % of HR reserve (ACSM moderate), for 20 min, bridging dips of 3.
