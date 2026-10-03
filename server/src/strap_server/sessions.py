@@ -30,6 +30,9 @@ MAX_SESSION = timedelta(hours=12)
 SUGGEST_RESERVE_FRACTION = 0.40
 SUGGEST_MIN_MINUTES = 20
 SUGGEST_MAX_DIP_MINUTES = 3
+# Zepp/strap workout type codes -> Ridge sports (SPEC S3), confirmed by the owner against his
+# own sessions in the Zepp export (2026-10-03). Unknown codes stay "other", their code kept.
+ZEPP_SPORTS = {17: "tennis", 52: "gym", 54: "stairs", 8: "treadmill", 6: "walk"}
 NO_HR = "no_hr_in_window"
 NO_RHR = "no_measured_rhr"
 MESSAGES = {
@@ -148,8 +151,7 @@ def list_range(cur: Cursor, user_id: UUID, tz: str, first: datetime, last: datet
         (user_id, first, last),
     )
     for start, dur, code in cur.fetchall():
-        # The strap's sport codes are not mapped yet (spec/01 §8): shown as "other", code kept.
-        items.append({"id": f"strap:{int(start.timestamp() * 1000)}", "sport": "other", "strap_sport_code": code,
+        items.append({"id": f"strap:{int(start.timestamp() * 1000)}", "sport": ZEPP_SPORTS.get(code, "other"), "strap_sport_code": code,
                       "start": int(start.timestamp() * 1000), "end": int((start + timedelta(seconds=dur)).timestamp() * 1000),
                       "source": "strap", "notes": None})
     for it in items:

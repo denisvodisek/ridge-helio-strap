@@ -64,6 +64,8 @@ def test_list_merges_strap_workouts_and_edits_round_trip(seeded) -> None:
         assert sessions.delete(conn, _seed.OWNER, made["id"]) and not sessions.delete(conn, _seed.OWNER, made["id"])
     assert moved["sport"] == "treadmill" and moved["stats"]["hr"]["minutes"] == 30
     assert {it["source"] for it in listed} == {"ridge", "strap"}
+    strap = next(it for it in listed if it["source"] == "strap")
+    assert strap["sport"] == sessions.ZEPP_SPORTS.get(strap["strap_sport_code"], "other")
 
 
 def test_sustained_moderate_hr_is_offered_until_confirmed_or_dismissed(seeded) -> None:

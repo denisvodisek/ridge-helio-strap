@@ -101,3 +101,8 @@ Facts about the export, checked on a real one (2026-10-03), that the importer re
 
 Workout types stay Zepp's numbers in `workout.sport`; the mapping to Ridge's sports is
 applied when read, so a corrected mapping needs no re-import.
+
+Mapping (`sessions.ZEPP_SPORTS`), confirmed by the owner against his own sessions: 17 tennis,
+52 gym, 54 stairs, 8 treadmill, 6 walk; anything else shows as "other" with its code kept.
+[CHECK: that the strap's own workout records (`0x05`, spec/01 §7.2) use the same type codes
+as Zepp's export; likely, since Zepp's records come from the strap, but not yet seen live.]
