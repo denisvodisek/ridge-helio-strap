@@ -37,3 +37,48 @@ owner is new or returning from a long gap.
 
 Until strain is scored, the card carries the raw `cardio_load` beside the withheld state,
 so the day's load is still visible, just not placed on a 0–21 scale.
+
+## S3 · Workout sessions (roadmap #9, `sessions.py`)
+
+A session is a time window with a sport, from one of three sources: `ridge` (started and
+stopped in the app, or logged afterwards), `suggested` (a S4 suggestion the owner
+confirmed) or `strap` (a workout the strap recorded, read from `workout`). Everything about
+a session is computed when it is read, from the per-minute HR already stored, with the
+same definitions as the day (spec/02 §2.4): nothing new is stored but the window.
+
+```
+minutes  = waking per-minute HR means in [start, end)   (HR_VALID_SQL, as cardio_load)
+hrmax    = 208 − 0.7 × age on the session's day           (Tanaka 2001, §2.4)
+rhr      = the measured resting HR cardio_load would use  (≤ 30 d old, §2.4; else withhold)
+trimp    = trimp_total(minutes, rhr, hrmax, sex)          (Banister, derive/trimp.py)
+zones    = Edwards minutes, lower bounds 50/60/70/80/90 % HRmax   (§2.4)
+strain   = strain_from_load(trimp, P95 of daily cardio_load, 90 d) — same 0–21 scale as the
+           day, so a session and its day compare; withheld while S2 says strain is learning
+peak, avg = max / mean of the minutes
+hrr1, hrr2 = HR in the last minute before `end` − HR 1 and 2 min after `end`
+```
+
+**HR recovery** (`hrr1`, `hrr2`): a well-evidenced autonomic fitness marker (Cole et al.
+1999, NEJM: HRR1 ≤ 12 bpm after an exercise test predicted mortality). Ours to apply here,
+with two honest limits shown beside it: the strap gives per-minute means, not beat-level
+HR, and a cool-down walk is not the test's protocol. So it is shown as **your own trend**
+across sessions of the same sport, never against Cole's cut-off. Withheld when either
+minute has no HR, or a later session starts within 2 min.
+
+Withheld reasons: `profile_or_weight_missing` (trimp, zones, strain), `no_measured_rhr`,
+`no_hr_in_window` (no HR minutes at all). Sports are a closed list: tennis, treadmill,
+run, walk, ride, gym, swim, yoga, other.
+
+## S4 · Suggested sessions ("looks like a workout")
+
+**Ours.** The owner shouldn't have to remember to press Start. For each local day, a run of
+waking minutes is suggested when:
+
+- HR ≥ rhr + 0.40 × (hrmax − rhr), i.e. at least 40 % of HR reserve, the lower bound of
+  moderate intensity in ACSM's Guidelines (11th ed., Table 6.1);
+- the run lasts ≥ 20 min, bridging dips below the line of ≤ 3 min (a changeover, a set rest);
+- it overlaps no sleep, no session and no strap workout, and wasn't dismissed before.
+
+Suggestions are offers, never data: nothing counts as a workout until the owner confirms
+one (it then becomes a `suggested` session with the sport they picked) or dismisses it
+(remembered by its start minute). [CHECK: tune 40 % / 20 min / 3 min on real days]

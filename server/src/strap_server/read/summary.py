@@ -231,21 +231,29 @@ def recovery_card(cur: Cursor, user_id: UUID, day: date, today: date) -> dict:
     return card
 
 
-def strain_card(cur: Cursor, user_id: UUID, day: date, missing: str = freshness.NOT_DERIVED_YET) -> dict:
-    row = _row(cur, user_id, day, "cardio_load")
-    if row is None:
-        return withheld(missing)
+def strain_scale(cur: Cursor, user_id: UUID, day: date) -> tuple[float | None, int]:
+    """The personal strain scale on `day` (spec/02 §2.5): P95 of daily cardio_load > 0 over the
+    90 days ending that day, and how many days it rests on (SPEC S2). One definition for the
+    day's card and its workout sessions."""
     cur.execute(
         "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY value), count(*) FROM derived_daily "
         "WHERE user_id = %s AND metric = 'cardio_load' AND value > 0 AND day >= %s AND day <= %s",
         (user_id, day - timedelta(days=STRAIN_SCALE_DAYS), day),
     )
     p95, n = cur.fetchone()
+    return (float(p95) if p95 is not None else None), int(n)
+
+
+def strain_card(cur: Cursor, user_id: UUID, day: date, missing: str = freshness.NOT_DERIVED_YET) -> dict:
+    row = _row(cur, user_id, day, "cardio_load")
+    if row is None:
+        return withheld(missing)
+    p95, n = strain_scale(cur, user_id, day)
     if n < STRAIN_SCALE_MIN_DAYS:
         # SPEC S2: a P95 of a few days is just the hardest of them, so day one always read 21.0.
         text = f"Strain is scored against your own hard days: {n} of {STRAIN_SCALE_MIN_DAYS} days so far."
         return {**withheld(LEARNING, {LEARNING: text}, (n, STRAIN_SCALE_MIN_DAYS)), "cardio_load": round(row[0], 1)}
-    return {"value": strain_from_load(row[0], float(p95) if p95 else None), "max": 21.0, "cardio_load": round(row[0], 1), "flags": row[1]}
+    return {"value": strain_from_load(row[0], p95), "max": 21.0, "cardio_load": round(row[0], 1), "flags": row[1]}
 
 
 def sleep_card(cur: Cursor, user_id: UUID, tz: str, day: date, today: date) -> dict:

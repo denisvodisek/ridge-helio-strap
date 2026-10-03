@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from pydantic import BaseModel
 
-from strap_server import journal, profile
+from strap_server import journal, profile, sessions
 from strap_server.config import Settings, get_settings
 from strap_server.db import connection
 from strap_server.ingest.models import IngestPayload, IngestSummary
@@ -180,6 +181,74 @@ def put_profile(
     with connection() as conn:
         _ensure_owner(conn, user_id, settings)
         return profile.put(conn, None, user_id, body)
+
+
+@app.get("/v1/sessions")
+def get_sessions(
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    start: Annotated[date, Query(alias="from")],
+    end: Annotated[date, Query(alias="to")],
+) -> list[dict]:
+    """Workout sessions (yours and the strap's) starting in the local days [from, to], with stats."""
+    with connection() as conn, conn.cursor() as cur:
+        tz = _owner_tz(conn, user_id, settings)
+        return sessions.list_range(cur, user_id, tz, *_local_bounds(tz, start, end))
+
+
+@app.post("/v1/sessions")
+def post_session(
+    body: sessions.SessionIn,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    with connection() as conn:
+        _ensure_owner(conn, user_id, settings)
+        return sessions.create(conn, user_id, _owner_tz(conn, user_id, settings), body)
+
+
+@app.patch("/v1/sessions/{session_id}")
+def patch_session(
+    session_id: str,
+    body: sessions.SessionPatch,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    with connection() as conn:
+        out = sessions.update(conn, user_id, _owner_tz(conn, user_id, settings), session_id, body)
+    if out is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
+    return out
+
+
+@app.delete("/v1/sessions/{session_id}")
+def delete_session(session_id: str, user_id: Annotated[UUID, Depends(owner)]) -> dict:
+    with connection() as conn:
+        if not sessions.delete(conn, user_id, session_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
+    return {"deleted": session_id}
+
+
+@app.get("/v1/sessions/suggestions")
+def get_session_suggestions(
+    day: date,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[dict]:
+    """'Looks like a workout': sustained moderate HR on `day` nothing else covers (SPEC S4)."""
+    with connection() as conn, conn.cursor() as cur:
+        return sessions.suggestions(cur, user_id, _owner_tz(conn, user_id, settings), day)
+
+
+class Dismissal(BaseModel):
+    start: datetime
+
+
+@app.post("/v1/sessions/suggestions/dismiss")
+def dismiss_suggestion(body: Dismissal, user_id: Annotated[UUID, Depends(owner)]) -> dict:
+    with connection() as conn:
+        sessions.dismiss(conn, user_id, body.start)
+    return {"dismissed": body.start.isoformat()}
 
 
 @app.post("/v1/ingest")
