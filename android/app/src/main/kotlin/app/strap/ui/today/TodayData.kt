@@ -13,10 +13,14 @@ import java.time.ZoneId
 sealed interface Reading {
     data class Value(val value: Double, val json: JSONObject) : Reading
 
-    data class Withheld(val message: String) : Reading
+    /** [progress] (have, need) when the reason is a learning period (docs/denis/SPEC.md S2). */
+    data class Withheld(val message: String, val progress: Pair<Int, Int>? = null) : Reading
 }
 
 val Reading.valueOrNull: Double? get() = (this as? Reading.Value)?.value
+
+/** (have, need) while the server is still learning this card's baseline, else null. */
+val Reading.learning: Pair<Int, Int>? get() = (this as? Reading.Withheld)?.progress
 
 /** The 30-day median the server compares a daily card with, if it has one. */
 val Reading.usual: Double? get() = (this as? Reading.Value)?.json?.optJSONObject("baseline")?.optDouble("median")?.takeIf { !it.isNaN() }
@@ -95,7 +99,9 @@ data class TodayData(
 
 private fun reading(card: JSONObject?): Reading = when {
     card == null -> Reading.Withheld("Not available.")
-    card.has("withheld") -> Reading.Withheld(card.getJSONObject("withheld").getString("message"))
+    card.has("withheld") -> card.getJSONObject("withheld").let { w ->
+        Reading.Withheld(w.getString("message"), w.optJSONObject("progress")?.let { it.getInt("have") to it.getInt("need") })
+    }
     card.isNull("value") -> Reading.Withheld("Not enough history yet to place this.")
     else -> Reading.Value(card.getDouble("value"), card)
 }

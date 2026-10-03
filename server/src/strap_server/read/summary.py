@@ -19,6 +19,8 @@ from psycopg import Cursor
 from strap_server.derive import freshness, sleep_score, vo2max
 from strap_server.derive._common import _day_bounds_utc, _load_profile
 from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
+from strap_server.derive.recovery import _BASELINE_DAYS as RECOVERY_BASELINE_DAYS
+from strap_server.derive.recovery import _BASELINE_MIN_POINTS as RECOVERY_BASELINE_MIN
 from strap_server.derive.robust import MAD_TO_SD, median, median_abs_deviation
 
 BASELINE_DAYS = 30
@@ -37,9 +39,28 @@ _MESSAGES: dict[str, str] = {
 }
 
 
-def withheld(reason: str, messages: dict[str, str] | None = None) -> dict:
-    """A card's withheld state; `messages` words a reason for that one card, over the shared map."""
-    return {"withheld": {"reason": reason, "message": (messages or {}).get(reason) or _MESSAGES.get(reason, reason)}}
+def withheld(reason: str, messages: dict[str, str] | None = None, progress: tuple[int, int] | None = None) -> dict:
+    """A card's withheld state; `messages` words a reason for that one card, over the shared map.
+
+    `progress` (have, need) rides along for a learning period (SPEC S2)."""
+    out = {"reason": reason, "message": (messages or {}).get(reason) or _MESSAGES.get(reason, reason)}
+    if progress is not None:
+        out["progress"] = {"have": progress[0], "need": progress[1]}
+    return {"withheld": out}
+
+
+# docs/denis/SPEC.md S2. Recovery's numbers are spec/02 §2.7's own; strain's minimum is ours.
+LEARNING = "learning_baseline"
+STRAIN_SCALE_MIN_DAYS = 7
+STRAIN_SCALE_DAYS = 90
+
+
+def _rows_before(cur: Cursor, user_id: UUID, day: date, metric: str, days: int) -> int:
+    cur.execute(
+        "SELECT count(*) FROM derived_daily WHERE user_id = %s AND metric = %s AND day < %s AND day >= %s",
+        (user_id, metric, day, day - timedelta(days=days)),
+    )
+    return int(cur.fetchone()[0])
 
 
 # ── verbatim read-time science ─────────────────────────────────────────────────
@@ -194,6 +215,10 @@ def factor_state(key: str, factor: dict) -> dict | None:
 def recovery_card(cur: Cursor, user_id: UUID, day: date, today: date) -> dict:
     row = _row(cur, user_id, day, "recovery_score")
     if row is None:
+        have = max(_rows_before(cur, user_id, day, m, RECOVERY_BASELINE_DAYS) for m in ("hrv_sleep_avg", "rhr_daily"))
+        if have < RECOVERY_BASELINE_MIN:
+            text = f"Recovery first learns your usual HRV and resting heart rate: {have} of {RECOVERY_BASELINE_MIN} nights so far."
+            return withheld(LEARNING, {LEARNING: text}, (have, RECOVERY_BASELINE_MIN))
         return withheld(freshness.NOT_DERIVED_YET)
     score, flags = int(row[0]), row[1]
     states = {k: st for k, f in (flags.get("factors") or {}).items() if (st := factor_state(k, f))}
@@ -211,11 +236,15 @@ def strain_card(cur: Cursor, user_id: UUID, day: date, missing: str = freshness.
     if row is None:
         return withheld(missing)
     cur.execute(
-        "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY value) FROM derived_daily "
+        "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY value), count(*) FROM derived_daily "
         "WHERE user_id = %s AND metric = 'cardio_load' AND value > 0 AND day >= %s AND day <= %s",
-        (user_id, day - timedelta(days=90), day),
+        (user_id, day - timedelta(days=STRAIN_SCALE_DAYS), day),
     )
-    p95 = cur.fetchone()[0]
+    p95, n = cur.fetchone()
+    if n < STRAIN_SCALE_MIN_DAYS:
+        # SPEC S2: a P95 of a few days is just the hardest of them, so day one always read 21.0.
+        text = f"Strain is scored against your own hard days: {n} of {STRAIN_SCALE_MIN_DAYS} days so far."
+        return {**withheld(LEARNING, {LEARNING: text}, (n, STRAIN_SCALE_MIN_DAYS)), "cardio_load": round(row[0], 1)}
     return {"value": strain_from_load(row[0], float(p95) if p95 else None), "max": 21.0, "cardio_load": round(row[0], 1), "flags": row[1]}
 
 

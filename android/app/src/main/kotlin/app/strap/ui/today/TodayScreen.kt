@@ -49,6 +49,7 @@ import app.strap.ui.components.Note
 import app.strap.ui.components.NoteLine
 import app.strap.ui.components.RidgeCard
 import app.strap.ui.components.SectionLabel
+import app.strap.ui.components.StepProgress
 import app.strap.ui.components.Subtle
 import app.strap.ui.components.Timeline
 import app.strap.ui.components.Track
@@ -60,9 +61,9 @@ import app.strap.ui.components.hm
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
-import org.json.JSONObject
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import org.json.JSONObject
 
 /** Where Today's gauges, cards, moments and tiles lead. */
 class TodayNav(
@@ -89,13 +90,28 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) 
         item {
             val strain = data.strain.valueOrNull
             val score = data.night?.deviceScore
+            // While a baseline is still forming the dial becomes a progress ring: "3/5 nights" in a
+            // quieter tint, the way Whoop and Oura show their calibration (DESIGN U5).
+            val strainLearning = data.strain.learning
+            val recoveryLearning = data.recovery.learning
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                GaugeBlock(strain?.let { "%.1f".format(it) } ?: "—", "of 21", strain?.let { (it / 21).toFloat() }, c.strain, "Strain", null,
-                    96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
-                GaugeBlock(recovery?.let { "${it.roundToInt()}%" } ?: "—", "ready", recovery?.let { (it / 100).toFloat() },
-                    recovery?.let(r::zone) ?: c.recovery, "Recovery",
-                    changeNote(recovery?.let { v -> data.recoveryWeekBefore(data.day)?.let { v - it } }, "vs week"),
-                    150.dp, 42.sp, onClick = nav.recovery)
+                if (strainLearning != null) {
+                    GaugeBlock("${strainLearning.first}/${strainLearning.second}", "days", strainLearning.first / strainLearning.second.toFloat(),
+                        c.strain.copy(alpha = 0.45f), "Strain", Note("learning", muted), 96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
+                } else {
+                    GaugeBlock(strain?.let { "%.1f".format(it) } ?: "—", "of 21", strain?.let { (it / 21).toFloat() }, c.strain, "Strain", null,
+                        96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
+                }
+                if (recoveryLearning != null) {
+                    GaugeBlock("${recoveryLearning.first}/${recoveryLearning.second}", "nights", recoveryLearning.first / recoveryLearning.second.toFloat(),
+                        c.recovery.copy(alpha = 0.45f), "Recovery", Note("learning your baseline", muted), 150.dp, 42.sp, onClick = nav.recovery)
+                } else {
+                    GaugeBlock(recovery?.let { "${it.roundToInt()}%" } ?: "—", "ready", recovery?.let { (it / 100).toFloat() },
+                        recovery?.let(r::zone) ?: c.recovery, "Recovery",
+                        changeNote(recovery?.let { v -> data.recoveryWeekBefore(data.day)?.let { v - it } }, "vs week"),
+                        150.dp, 42.sp, onClick = nav.recovery)
+                }
                 // The strap's own 0-100 score, named as the strap's (we compute no composite sleep score).
                 GaugeBlock(score?.toString() ?: "—", "Amazfit", score?.let { it / 100f }, c.sleep, "Sleep", null,
                     96.dp, 24.sp, stroke = 8f, onClick = nav.sleep)
@@ -155,9 +171,10 @@ private fun RecoveryCard(data: TodayData, onOpen: () -> Unit) {
         when (recovery) {
             is Reading.Withheld -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Recovery", style = RidgeType.cardTitle, modifier = Modifier.weight(1f))
+                    Text(if (recovery.progress != null) "Learning your baseline" else "Recovery", style = RidgeType.cardTitle, modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                recovery.progress?.let { (have, need) -> StepProgress(have, need, LocalMetricColors.current.recovery, Modifier.padding(vertical = 6.dp)) }
                 Subtle(recovery.message)
             }
             is Reading.Value -> {

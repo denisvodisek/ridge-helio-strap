@@ -1,5 +1,7 @@
 package app.strap.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +26,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -171,3 +176,22 @@ fun ListRow(
         trailing?.invoke(this)
     }
 }
+
+/**
+ * A learning period as [need] segments, [have] of them filled and each filling in turn on
+ * first show (30 ms apart), so "3 of 5 nights" is something you see, not only read.
+ */
+@Composable
+fun StepProgress(have: Int, need: Int, color: Color, modifier: Modifier = Modifier) {
+    val track = LocalRidgeColors.current.surface3
+    Row(modifier.fillMaxWidth().height(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        repeat(need) { i ->
+            val fill = remember { Animatable(0f) }
+            LaunchedEffect(have) { fill.animateTo(if (i < have) 1f else 0f, tween(durationMillis = 260, delayMillis = 30 * i)) }
+            Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(4.dp)).background(track)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(fill.value).clip(RoundedCornerShape(4.dp)).background(color))
+            }
+        }
+    }
+}
+

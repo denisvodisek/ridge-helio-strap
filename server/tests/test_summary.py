@@ -121,6 +121,20 @@ def test_a_day_without_data_is_withheld_by_name_never_null(seeded) -> None:
 
 
 @pytest.mark.db
+def test_a_young_history_says_how_far_the_baseline_has_come(seeded) -> None:
+    """SPEC S2: early days are a learning period with progress, not "sync the strap"."""
+    with psycopg.connect(seeded) as conn:
+        early = day_summary(conn.cursor(), _seed.OWNER, TZ, _seed.DAYS[2])
+    rec = early["recovery"]["withheld"]
+    assert rec["reason"] == "learning_baseline"
+    assert rec["progress"]["need"] == 5 and rec["progress"]["have"] < 5
+    assert f'{rec["progress"]["have"]} of 5 nights' in rec["message"]
+    strain = early["strain"]
+    assert strain["withheld"]["reason"] == "learning_baseline" and strain["withheld"]["progress"]["need"] == 7
+    assert strain["cardio_load"] >= 0  # the day's load stays visible, just not on the 0-21 scale
+
+
+@pytest.mark.db
 def test_without_a_profile_the_body_cards_name_the_profile_not_a_sync(seeded) -> None:
     day = _seed.DAYS[-1]
     with psycopg.connect(seeded) as conn:
