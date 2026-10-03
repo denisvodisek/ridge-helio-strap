@@ -1,6 +1,8 @@
 package app.strap.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -23,8 +25,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -34,6 +38,7 @@ import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /** A coloured one-liner under a number: a change ("▲ 8 vs week") or a target note. */
 data class Note(val text: String, val color: Color)
@@ -68,11 +73,14 @@ fun changeNote(
 /**
  * The 270° gauge: starts at −135° from 12 o'clock, runs clockwise; the track resumes 9°
  * after the value's end. [fraction] null = withheld — an empty track and "—", never a zero.
+ * The number counts up with the arc as it draws (DESIGN U8); with system animations off
+ * both land at once, because Compose follows the animator duration scale.
  */
 @Composable
-fun Gauge(value: String, unit: String?, fraction: Float?, color: Color, size: Dp, valueSize: TextUnit, stroke: Float = 7f) {
+fun Gauge(value: String, unit: String?, fraction: Float?, color: Color, size: Dp, valueSize: TextUnit, stroke: Float = 7f, crown: Boolean = false) {
     val progress = remember { Animatable(0f) }
-    LaunchedEffect(fraction) { progress.animateTo((fraction ?: 0f).coerceIn(0f, 1f), tween(700)) }
+    LaunchedEffect(fraction) { progress.animateTo((fraction ?: 0f).coerceIn(0f, 1f), tween(900, easing = EaseOutCubic)) }
+    val shown = countingUp(value, fraction, progress.value)
     val track = LocalRidgeColors.current.surface3
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
@@ -90,10 +98,24 @@ fun Gauge(value: String, unit: String?, fraction: Float?, color: Color, size: Dp
             if (sweep > 0.5f) drawArc(color, start, sweep, false, topLeft, arc, style = style)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, fontSize = valueSize, lineHeight = valueSize, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = RidgeType.body.fontWeight))
+            if (crown) Crown(size * 0.13f)
+            Text(shown, fontSize = valueSize, lineHeight = valueSize, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = RidgeType.body.fontWeight, fontFeatureSettings = "tnum"))
             unit?.let { Text(it.uppercase(), style = RidgeType.unit, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
         }
     }
+}
+
+private val LEADING_NUMBER = Regex("""^(\d+)(?:\.(\d+))?(.*)$""")
+
+/** [value]'s leading number scaled by how far the arc has drawn ("62%" → "31%" halfway); text as is otherwise. */
+private fun countingUp(value: String, fraction: Float?, drawn: Float): String {
+    val m = LEADING_NUMBER.matchEntire(value) ?: return value
+    // "7:23" or "3/5" is not one number with a unit: counting its first part would tick "1:23", "2:23"…
+    if (m.groupValues[3].any { it.isDigit() }) return value
+    if (fraction == null || fraction <= 0f || drawn >= fraction) return value
+    val decimals = m.groupValues[2].length
+    val target = (m.groupValues[1] + if (decimals > 0) "." + m.groupValues[2] else "").toDouble()
+    return "%.${decimals}f".format(target * drawn / fraction) + m.groupValues[3]
 }
 
 /** Gauge + label (12/500 uppercase) + change line; the whole block is the tap target. */
@@ -109,6 +131,7 @@ fun GaugeBlock(
     valueSize: TextUnit,
     stroke: Float = 7f,
     modifier: Modifier = Modifier,
+    crown: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -116,7 +139,7 @@ fun GaugeBlock(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Gauge(value, unit, fraction, color, size, valueSize, stroke)
+        Gauge(value, unit, fraction, color, size, valueSize, stroke, crown)
         Text(label.uppercase(), style = RidgeType.section)
         NoteLine(note)
     }
@@ -154,5 +177,34 @@ fun HeroRow(
 
 /** The standard hero gauge: 168 dp, 38 sp value. */
 @Composable
-fun HeroGauge(value: String, unit: String?, fraction: Float?, color: Color, label: String, note: Note?, onClick: (() -> Unit)? = null) =
-    GaugeBlock(value, unit, fraction, color, label, note, 168.dp, 38.sp, onClick = onClick)
+fun HeroGauge(value: String, unit: String?, fraction: Float?, color: Color, label: String, note: Note?, crown: Boolean = false, onClick: (() -> Unit)? = null) =
+    GaugeBlock(value, unit, fraction, color, label, note, 168.dp, 38.sp, crown = crown, onClick = onClick)
+
+/**
+ * The earned crown (DESIGN U10): a small gold crown that springs in above the number once the
+ * arc has drawn. Oura's convention: noticed, never loud, and only for a genuinely good day.
+ */
+@Composable
+private fun Crown(height: Dp) {
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(850)
+        pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f))
+    }
+    val gold = Color(0xFFE2B33C)
+    Canvas(Modifier.size(height * 1.5f, height).graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceIn(0f, 1f) }) {
+        val w = size.width
+        val h = size.height
+        val crown = Path().apply {
+            moveTo(0.08f * w, 0.92f * h)
+            lineTo(0.0f, 0.22f * h)
+            lineTo(0.3f * w, 0.55f * h)
+            lineTo(0.5f * w, 0.0f)
+            lineTo(0.7f * w, 0.55f * h)
+            lineTo(w, 0.22f * h)
+            lineTo(0.92f * w, 0.92f * h)
+            close()
+        }
+        drawPath(crown, gold)
+    }
+}

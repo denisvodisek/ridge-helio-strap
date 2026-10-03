@@ -37,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.strap.api.ApiClient
@@ -53,13 +55,13 @@ import app.strap.ui.theme.RidgeType
 import app.strap.ui.today.journalHeadline
 import app.strap.ui.today.journalIcon
 import app.strap.ui.today.journalName
-import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 private data class Quick(val label: String, val amount: String, val kind: String, val value: Double, val name: String?, val logged: String)
 
@@ -77,6 +79,7 @@ fun JournalScreen(api: ApiClient) {
     var weightDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snack = LocalSnackbar.current
+    val haptics = LocalHapticFeedback.current
     val today = LocalDate.now()
     LaunchedEffect(reload) {
         try {
@@ -91,8 +94,10 @@ fun JournalScreen(api: ApiClient) {
             val body = JSONObject().put("kind", kind).put("amount", amount).put("ts", ts)
             name?.let { body.put("name", it) }
             snack(done(api.addJournal(body)), null, null)
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm) // one clear tick: it's logged
             reload++
         } catch (e: ApiException) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
             snack(e.message ?: "Could not save.", null, null)
         }
     }

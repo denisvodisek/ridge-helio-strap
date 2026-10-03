@@ -110,6 +110,7 @@ fun SleepScreen(api: ApiClient, refreshKey: Any?) {
                     if (tst != null && need != null) (tst / need).toFloat() else null,
                     c.sleep, "Asleep",
                     changeNote(if (tst != null && need != null) tst - need else null, "vs need", magnitude = { "${it.roundToInt()} min" }),
+                    crown = tst != null && need != null && tst >= need,
                 )
             }
         }

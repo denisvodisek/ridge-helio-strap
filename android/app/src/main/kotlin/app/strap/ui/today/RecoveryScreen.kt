@@ -92,7 +92,7 @@ private fun ReadinessCard(recovery: Double, data: TodayData, zone: androidx.comp
         }
         Subtle(
             when {
-                readiness != null -> "Recovery reduced by today's load so far: ${readiness.load.roundToInt()} vs your typical ${readiness.typical.roundToInt()}."
+                readiness != null -> loadSentence(readiness.load, readiness.typical, recovery.roundToInt() - readiness.value)
                 data.day == LocalDate.now() -> "Not reduced yet: today's load is not known."
                 else -> "Final value for that day."
             },
@@ -110,6 +110,24 @@ private fun ReadinessCard(recovery: Double, data: TodayData, zone: androidx.comp
             Text("100", style = RidgeType.caption, color = muted)
         }
     }
+}
+
+/**
+ * Today's load in words, not TRIMP units (DESIGN U7): "51 vs your typical 193" meant nothing
+ * to a person; "about a quarter of a typical day" does. Only phrases the server's two numbers.
+ */
+internal fun loadSentence(load: Double, typical: Double, pointsOff: Int): String {
+    val share = if (typical > 0) load / typical else 0.0
+    val amount = when {
+        share < 0.15 -> "a light start"
+        share < 0.35 -> "about a quarter of a typical day"
+        share < 0.65 -> "about half a typical day"
+        share < 0.9 -> "most of a typical day"
+        share < 1.1 -> "about a typical day"
+        else -> "%.1f× a typical day".format(share)
+    }
+    val off = if (pointsOff > 0) ", which takes $pointsOff points off this morning's recovery" else ", which doesn't change this morning's recovery"
+    return "Today's load so far: $amount$off."
 }
 
 @Composable

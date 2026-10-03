@@ -5,8 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -74,12 +82,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,7 +108,6 @@ import app.strap.ui.components.LocalSnackbar
 import app.strap.ui.detail.DetailMetric
 import app.strap.ui.detail.MetricDetailScreen
 import app.strap.ui.isRunning
-import app.strap.ui.syncLine
 import app.strap.ui.journal.JournalScreen
 import app.strap.ui.settings.ProfileScreen
 import app.strap.ui.settings.SettingsScreen
@@ -109,6 +116,7 @@ import app.strap.ui.setup.SetupFlow
 import app.strap.ui.setup.StrapStep
 import app.strap.ui.sleep.SleepScreen
 import app.strap.ui.strap.StrapScreen
+import app.strap.ui.syncLine
 import app.strap.ui.syncProgress
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
@@ -119,7 +127,6 @@ import app.strap.ui.today.TodayContent
 import app.strap.ui.today.TodayData
 import app.strap.ui.today.TodayNav
 import app.strap.ui.today.loadToday
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -127,6 +134,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.min
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -349,7 +357,17 @@ private fun AppShell(app: StrapApp) {
                 }
             },
         ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
+            // Shared-axis motion (DESIGN U8): a pushed screen slides in from the right and back out
+            // to it; a tab change fades through. Branches read `shown`, not the live state, so the
+            // outgoing screen keeps drawing itself while it leaves.
+            AnimatedContent(
+                targetState = Shown(top, tab, stack.size),
+                modifier = Modifier.padding(padding).fillMaxSize(),
+                transitionSpec = { screenTransition(initialState, targetState) },
+                label = "screen",
+            ) { shown ->
+                val top = shown.top
+                val tab = shown.tab
                 when {
                     top == Pushed.Settings -> SettingsScreen(
                         app,
@@ -378,6 +396,21 @@ private fun AppShell(app: StrapApp) {
     }
     sheet?.let { InfoSheet(it) { sheet = null } }
     if (picking) DayPicker(day, onDismiss = { picking = false }) { day = it; picking = false }
+}
+
+/** What the content area shows: the pushed screen (if any) over a tab, and how deep the stack is. */
+private data class Shown(val top: Pushed?, val tab: Tab, val depth: Int)
+
+/** Material's shared X axis for push and pop (30 dp travel), fade through for a tab change. */
+private fun screenTransition(from: Shown, to: Shown): ContentTransform {
+    val travel = { width: Int -> width / 12 } // ≈ 30 dp on a phone: a nudge, not a page turn
+    return when {
+        to.depth > from.depth -> (slideInHorizontally(tween(300, easing = EaseOutCubic), travel) + fadeIn(tween(220, delayMillis = 60)))
+            .togetherWith(slideOutHorizontally(tween(300, easing = EaseOutCubic)) { -travel(it) } + fadeOut(tween(90)))
+        to.depth < from.depth -> (slideInHorizontally(tween(300, easing = EaseOutCubic)) { -travel(it) } + fadeIn(tween(220, delayMillis = 60)))
+            .togetherWith(slideOutHorizontally(tween(300, easing = EaseOutCubic), travel) + fadeOut(tween(90)))
+        else -> fadeIn(tween(210, delayMillis = 90)).togetherWith(fadeOut(tween(90)))
+    }
 }
 
 /** Setup screens: no top bar, no navigation bar. */

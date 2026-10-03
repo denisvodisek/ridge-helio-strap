@@ -58,6 +58,8 @@ import app.strap.ui.components.changeNote
 import app.strap.ui.components.clockOf
 import app.strap.ui.components.factorTrack
 import app.strap.ui.components.hm
+import app.strap.ui.components.rememberEntrance
+import app.strap.ui.components.stagger
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
@@ -84,8 +86,9 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) 
     val r = LocalRidgeColors.current
     val recovery = data.recovery.valueOrNull
     var hiddenIllness by rememberSaveable { mutableStateOf<String?>(null) }
+    val entrance = rememberEntrance()
     LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { WeekStrip(data.stripDays, data.recoveryByDay, data.day, nav.selectDay) }
+        item { Box(Modifier.stagger(entrance, 0)) { WeekStrip(data.stripDays, data.recoveryByDay, data.day, nav.selectDay) } }
         data.illness?.takeIf { it != hiddenIllness }?.let { text -> item { IllnessBanner(text) { hiddenIllness = text } } }
         item {
             val strain = data.strain.valueOrNull
@@ -95,7 +98,7 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) 
             val strainLearning = data.strain.learning
             val recoveryLearning = data.recovery.learning
             val muted = MaterialTheme.colorScheme.onSurfaceVariant
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).stagger(entrance, 1), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 if (strainLearning != null) {
                     GaugeBlock("${strainLearning.first}/${strainLearning.second}", "days", strainLearning.first / strainLearning.second.toFloat(),
                         c.strain.copy(alpha = 0.45f), "Strain", Note("learning", muted), 96.dp, 24.sp, stroke = 8f, onClick = nav.activity)
@@ -110,25 +113,31 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier) 
                     GaugeBlock(recovery?.let { "${it.roundToInt()}%" } ?: "—", "ready", recovery?.let { (it / 100).toFloat() },
                         recovery?.let(r::zone) ?: c.recovery, "Recovery",
                         changeNote(recovery?.let { v -> data.recoveryWeekBefore(data.day)?.let { v - it } }, "vs week"),
-                        150.dp, 42.sp, onClick = nav.recovery)
+                        150.dp, 42.sp, crown = recovery != null && recovery >= CROWN_AT, onClick = nav.recovery)
                 }
                 // The strap's own 0-100 score, named as the strap's (we compute no composite sleep score).
                 GaugeBlock(score?.toString() ?: "—", "Amazfit", score?.let { it / 100f }, c.sleep, "Sleep", null,
                     96.dp, 24.sp, stroke = 8f, onClick = nav.sleep)
             }
         }
-        item { RecoveryCard(data, nav.recovery) }
+        item { Box(Modifier.stagger(entrance, 2)) { RecoveryCard(data, nav.recovery) } }
         item { SectionLabel("Your day", "sleep, workouts, journal") }
         item {
             val moments = moments(data, nav)
-            if (moments.isEmpty()) RidgeCard { Subtle("Nothing recorded for this day yet.") } else Timeline(moments)
+            Box(Modifier.stagger(entrance, 3)) { if (moments.isEmpty()) RidgeCard { Subtle("Nothing recorded for this day yet.") } else Timeline(moments) }
         }
         item { SectionLabel("Heart & stress", if (data.day == LocalDate.now()) "vs your usual by now" else "vs your usual day") }
-        item { StressCard(data, nav.stress) }
-        item { HeartCard(data, nav.heart) }
-        item { StepsRow(data, nav.steps) }
+        item { Box(Modifier.stagger(entrance, 4)) { StressCard(data, nav.stress) } }
+        item { Box(Modifier.stagger(entrance, 5)) { HeartCard(data, nav.heart) } }
+        item { Box(Modifier.stagger(entrance, 6)) { StepsRow(data, nav.steps) } }
     }
 }
+
+/** Recovery at or above this earns the crown (DESIGN U10; Oura's 85, a display rule, not science). */
+internal const val CROWN_AT = 85.0
+
+/** Which contributor states lead on Today: what needs a look, then what's better, then typical. */
+private val STATE_ORDER = mapOf("watch" to 0, "short" to 0, "better" to 1, "typical" to 2)
 
 /** Recovery zone name. */
 internal fun zoneName(recovery: Double) = when {
@@ -185,8 +194,14 @@ private fun RecoveryCard(data: TodayData, onOpen: () -> Unit) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 val week = data.recoveryWeekTo(data.day)?.let { " · week average ${it.roundToInt()}%" } ?: ""
-                Subtle("${recovery.value.roundToInt()}%$week. Each part against your last 42 days:")
-                BaselineRows(data.factors.map { f -> { BaselineRow(FACTOR_LABELS.getValue(f.key), factorUsual(f), factorValue(f), factorTrackOf(f), status = f.label) } })
+                Subtle("${recovery.value.roundToInt()}%$week. What stood out against your last 42 days:")
+                // Today shows the two parts worth knowing (anything flagged first, then the heaviest);
+                // the full breakdown lives on Recovery, one tap away, not twice (DESIGN U6).
+                val shown = data.factors.sortedWith(compareBy<Factor>({ STATE_ORDER[it.state] ?: 2 }, { -it.weight })).take(2)
+                BaselineRows(shown.map { f -> { BaselineRow(FACTOR_LABELS.getValue(f.key), factorUsual(f), factorValue(f), factorTrackOf(f), status = f.label) } })
+                if (data.factors.size > shown.size) {
+                    Text("See all ${data.factors.size} parts", style = RidgeType.label, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp))
+                }
             }
         }
     }

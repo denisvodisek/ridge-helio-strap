@@ -23,6 +23,8 @@ donut for anything but the one hero number, or let a streak break on a sick day.
 
 ## Audit: what to change (ranked)
 
+Status 2026-10-03: U1–U10 built on `feat/profile-screen` (see git log); U3 gridlines, U8 motion and U10 still need a look on a real device.
+
 | # | Change | Why | Where |
 |---|---|---|---|
 | U1 | **Quiet sync.** No progress bar or spinner over the content on every tab. Auto-sync shows only in the top-bar subtitle ("Syncing · 40 %"); pull-to-refresh uses M3's morphing `LoadingIndicator`; the end is a short snackbar only when new data arrived. | The bar + floating spinner sit on top of cards on all five tabs and make an automatic background job look like an error. | `MainActivity`, `Refreshable` |
@@ -34,7 +36,7 @@ donut for anything but the one hero number, or let a streak break on a sick day.
 | U7 | **Readiness in words.** "Today's load so far: about a quarter of a typical day" with a bar, not "51 vs your typical 193". | Raw TRIMP units mean nothing to a person. | `RecoveryScreen` |
 | U8 | **Motion and haptics.** Hero number counts up once per day; cards rise in with a 30 ms stagger on first load; pushed screens use a shared-axis slide; `CONFIRM` haptic on save/log, a tick per hour while scrubbing a day chart. All via `MaterialTheme.motionScheme`, and off when the system's remove-animations setting is on. | Today the app only animates the gauge fill and the segmented buttons. | theme, components |
 | U9 | **Profile that explains itself.** DOB typed (M3 `DisplayMode.Input`), height as a stepper, activity level as five short chips with one-line help, and an "unlocks" line per field (e.g. date of birth → sleep need). | It reads like a form; the reason for each field is the best persuasion (Noom). | `ProfileScreen` |
-| U10 | **Earned delight.** A small crown next to recovery ≥ 85 and next to a night that met its sleep need. | Oura's crown: noticed, never loud. | dials |
+| U10 | **Earned delight.** A small crown springs in above recovery ≥ 85 % and above a night that met its sleep need, after the arc has drawn. 85 is Oura's line and a display rule (`CROWN_AT`), not science. | Oura's crown: noticed, never loud. | dials |
 
 Later, with the insight engine (roadmap #4): a fourth hero row "What's moving your recovery"
 (n=1 findings) and a Trends tab replacing the Strap tab, which moves under the top-bar battery

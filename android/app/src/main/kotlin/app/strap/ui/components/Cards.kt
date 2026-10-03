@@ -1,6 +1,7 @@
 package app.strap.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -193,5 +195,28 @@ fun StepProgress(have: Int, need: Int, color: Color, modifier: Modifier = Modifi
             }
         }
     }
+}
+
+/**
+ * A screen's entrance clock: 0 → 1 once, on first show. Items read it through [stagger], so
+ * the first screenful rises in order and anything scrolled to later is simply there.
+ */
+@Composable
+fun rememberEntrance(): Animatable<Float, *> {
+    val clock = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { clock.animateTo(1f, tween(ENTRANCE_MS, easing = LinearEasing)) }
+    return clock
+}
+
+private const val ENTRANCE_MS = 700
+private const val STAGGER_MS = 40
+private const val RISE_MS = 260
+
+/** Item [index] fades in and rises 16 dp, [STAGGER_MS] after the one before (DESIGN U8). */
+fun Modifier.stagger(clock: Animatable<Float, *>, index: Int): Modifier = graphicsLayer {
+    val p = ((clock.value * ENTRANCE_MS - index * STAGGER_MS) / RISE_MS).coerceIn(0f, 1f)
+    val eased = 1 - (1 - p) * (1 - p) * (1 - p)
+    alpha = eased
+    translationY = (1 - eased) * 16.dp.toPx()
 }
 
