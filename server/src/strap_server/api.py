@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 
-from strap_server import journal
+from strap_server import journal, profile
 from strap_server.config import Settings, get_settings
 from strap_server.db import connection
 from strap_server.ingest.models import IngestPayload, IngestSummary
@@ -162,6 +162,24 @@ def delete_journal(entry_id: str, user_id: Annotated[UUID, Depends(owner)]) -> d
         if not journal.delete(conn, user_id, entry_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such entry")
     return {"deleted": entry_id}
+
+
+@app.get("/v1/profile")
+def get_profile(user_id: Annotated[UUID, Depends(owner)]) -> dict:
+    with connection() as conn:
+        return profile.get(conn, user_id)
+
+
+@app.put("/v1/profile")
+def put_profile(
+    body: profile.ProfileIn,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    """Replaces the profile; a change re-derives every day before answering."""
+    with connection() as conn:
+        _ensure_owner(conn, user_id, settings)
+        return profile.put(conn, None, user_id, body)
 
 
 @app.post("/v1/ingest")

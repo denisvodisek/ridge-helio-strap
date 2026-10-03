@@ -100,6 +100,7 @@ import app.strap.ui.detail.DetailMetric
 import app.strap.ui.detail.MetricDetailScreen
 import app.strap.ui.isRunning
 import app.strap.ui.journal.JournalScreen
+import app.strap.ui.settings.ProfileScreen
 import app.strap.ui.settings.SettingsScreen
 import app.strap.ui.setup.ServerStep
 import app.strap.ui.setup.SetupFlow
@@ -151,6 +152,8 @@ private sealed interface Pushed {
     data object Settings : Pushed
 
     data object Diagnostics : Pushed
+
+    data object Profile : Pushed
 
     /** Setup in edit mode, full screen: no top bar or navigation bar. */
     data object ChangeStrap : Pushed
@@ -247,6 +250,7 @@ private fun AppShell(app: StrapApp) {
         is Pushed.Detail -> top.metric.title
         Pushed.Settings -> "Settings"
         Pushed.Diagnostics -> "Diagnostics"
+        Pushed.Profile -> "Profile"
         else -> when (tab) {
             Tab.TODAY -> dayTitle(day)
             Tab.STRAP -> "Helio Strap"
@@ -331,12 +335,14 @@ private fun AppShell(app: StrapApp) {
                 when {
                     top == Pushed.Settings -> SettingsScreen(
                         app,
+                        onProfile = { push(Pushed.Profile) },
                         onChangeStrap = { push(Pushed.ChangeStrap) },
                         onChangeServer = { push(Pushed.ChangeServer) },
                         onDiagnostics = { push(Pushed.Diagnostics) },
                     )
                     top == Pushed.Diagnostics -> DiagnosticsScreen(app)
                     api == null -> Centered("Add your server in Settings (the gear) first.")
+                    top == Pushed.Profile -> ProfileScreen(api)
                     top is Pushed.Detail -> MetricDetailScreen(api, top.metric, day)
                     top == Pushed.Recovery -> today?.takeIf { it.day == day }?.let { RecoveryContent(it) { d -> day = d } } ?: Loading(todayError)
                     else -> Refreshable(running, onRefresh = { SyncService.start(app) }) {

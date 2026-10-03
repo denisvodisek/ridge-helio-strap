@@ -63,6 +63,14 @@ def rederive(conninfo: str | None, user_id: UUID, log=print, since: date | None 
                 with conn.cursor() as cur:
                     for day in chunk_days:
                         derive_illness_flag(cur, user_id, tz, day)
+                # A row this pass did not re-stamp is one today's inputs no longer produce
+                # (a cleared height, a deleted weight): served on, it would be a number with
+                # nothing behind it. Every night and day of the chunk ran in this one
+                # transaction, so `now()` marks exactly the rows that are still true.
+                conn.execute(
+                    "DELETE FROM derived_daily WHERE user_id = %s AND day = ANY(%s) AND derived_at < now()",
+                    (user_id, chunk_days),
+                )
             log(f"derived {chunk_start} .. {chunk_end}: {len(chunk_nights)} nights, {len(chunk_days)} days")
         total += len(chunk_days)
         chunk_start = chunk_end + timedelta(days=1)

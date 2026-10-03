@@ -74,7 +74,7 @@ S = a session or two · M = a few sessions · L = a project in itself.
 
 ### P0 · Foundations (do first)
 
-1. **Profile screen + API** (S). `GET/PUT /v1/profile` and a Settings → Profile screen; on
+1. ✅ **Profile screen + API** (S, done 2026-10-03, branch `feat/profile-screen`). `GET/PUT /v1/profile` and a Settings → Profile screen; on
    change, rederive the affected days. Unblocks energy, cardio load, strain, sleep need,
    VO₂max and biological age. Upstream would likely take this as a PR.
 2. **Sync when the app opens** (S). Start `SyncService` on the app's `ON_START` if the last

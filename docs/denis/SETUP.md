@@ -12,23 +12,15 @@ Budget about two hours the first time.
 | **Zepp account with email + password** | `keyfetch` signs in once to read the strap's auth key. Google/Apple-only sign-in won't work unless you add a password | ✓ |
 | An always-on box with Docker, reachable over **HTTPS** | The server computes every daily number; the app refuses plain HTTP | see §2 |
 
-What this Mac already has (checked 2026-10-03): `uv` ✓, Android SDK ✓ (`~/Library/Android/sdk`),
-Java 24 (wrong one, the build wants **JDK 17**), **no Docker**, `adb` not on PATH.
-
-```bash
-brew install --cask orbstack
-```
-
-```bash
-brew install --cask zulu@17
-```
-
-Then add to `~/.zshrc`:
+Done on this Mac 2026-10-03: OrbStack (Docker) and `openjdk@17` (a brew formula, no sudo,
+unlike the `zulu@17` cask) installed; `~/.zshrc` has:
 
 ```sh
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export PATH="$JAVA_HOME/bin:$HOME/Library/Android/sdk/platform-tools:$PATH"
 ```
+
+Baseline at that point: server 173 tests pass (DB included), `strap-protocol` 67 pass.
 
 ## 1 · The fork (done 2026-10-03)
 
@@ -39,6 +31,9 @@ The fork is public (GitHub forks of public repos can't be private), so never com
 anything personal: see CLAUDE.md "Never commit".
 
 ## 2 · Run the server
+
+**Denis's plan (2026-10-03):** this Mac first (OrbStack + Tailscale), then move to his own
+DigitalOcean droplet by backup/restore. The steps below are the same on either box.
 
 **Recommended: a small VPS + Tailscale.** It's health data, so it should not be on the
 public internet at all. Tailscale gives the box a real HTTPS name inside your private
@@ -120,10 +115,14 @@ cd ~/Development/ridge-helio-strap && tools/demo-data/load.sh
 Then `./gradlew :app:assembleDemo`, `adb reverse tcp:8767 tcp:8767`, install the demo APK.
 "Ridge demo" installs next to the real app. This is the loop for UI changes.
 
-## 6 · Set your profile (required, no screen for it yet)
+## 6 · Set your profile (required)
 
-Most metrics need date of birth, sex and height, plus a logged weight (Journal tab). The
-non-exercise VO₂max also needs **SR-PA**, a self-reported 0–4 answer:
+In the app: **Settings (gear) → You → Profile**. Date of birth, sex, height and activity
+level, plus a logged weight (Journal tab). Saving recalculates every day you have, so the
+order doesn't matter. Without it, energy, cardio load, strain, sleep need, recovery's sleep
+part and VO₂max are withheld, each saying the profile is what's missing.
+
+Activity level is Jurca 2005's self-reported SR-PA, read only by the VO₂max estimate:
 
 | SR-PA | Meaning (Jurca 2005) |
 |---|---|
@@ -133,19 +132,11 @@ non-exercise VO₂max also needs **SR-PA**, a self-reported 0–4 answer:
 | 3 | Aerobic exercise (run, swim, cycle) 1–3 h/week |
 | 4 | Aerobic exercise over 3 h/week |
 
-On the server box:
+Scripted alternative (`GET`/`PUT /v1/profile`, the phone token as bearer):
 
 ```bash
-docker compose exec db psql -U strap -d strap -c "INSERT INTO profile (user_id, height_cm, sex, dob, srpa) VALUES ('00000000-0000-0000-0000-000000000001', 180, 'male', '1990-01-01', 2) ON CONFLICT (user_id) DO UPDATE SET height_cm = EXCLUDED.height_cm, sex = EXCLUDED.sex, dob = EXCLUDED.dob, srpa = EXCLUDED.srpa, updated_at = now()"
+curl -fsS -X PUT https://YOUR-SERVER/v1/profile -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"height_cm": 180, "sex": "male", "dob": "1990-01-01", "srpa": 2}'
 ```
-
-(Replace the values with yours.) Then log your weight in the app and recompute:
-
-```bash
-docker compose exec api python -m strap_server.rederive
-```
-
-A profile screen in the app is the first item on the roadmap.
 
 ## 7 · What to expect in the first weeks
 

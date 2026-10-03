@@ -97,6 +97,21 @@ def test_a_day_without_data_is_withheld_by_name_never_null(seeded) -> None:
     for card in (out["recovery"], out["strain"], out["steps"]["steps"], out["heart"]["resting"], out["heart"]["today"], out["vo2max"]):
         assert card["withheld"]["reason"] and card["withheld"]["message"]
     assert out["sleep"]["sessions"] == [] and "withheld" in out["sleep"]["health"]
+    # The generic "not computed yet" is worded for any card; it used to say "sleep debt".
+    assert "sleep debt" not in out["recovery"]["withheld"]["message"]
+    assert "sleep debt" not in out["steps"]["steps"]["withheld"]["message"]
+
+
+@pytest.mark.db
+def test_without_a_profile_the_body_cards_name_the_profile_not_a_sync(seeded) -> None:
+    day = _seed.DAYS[-1]
+    with psycopg.connect(seeded) as conn:
+        conn.execute("DELETE FROM profile")
+        conn.execute("DELETE FROM derived_daily WHERE metric IN ('total_calories', 'active_calories', 'distance_m_daily', 'cardio_load')")
+        out = day_summary(conn.cursor(), _seed.OWNER, TZ, day)
+    for card in (out["strain"], out["steps"]["total_calories"], out["steps"]["active_calories"], out["steps"]["distance_m"]):
+        assert card["withheld"]["reason"] == "profile_or_weight_missing"
+    assert out["steps"]["steps"]["value"] > 0  # steps need no body: still served
 
 
 @pytest.mark.db

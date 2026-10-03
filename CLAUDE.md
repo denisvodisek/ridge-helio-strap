@@ -76,9 +76,12 @@ docker compose exec api python -m strap_server.rederive
 
 ## Known gotchas
 
-- **The profile (DOB, sex, height, SR-PA) has no API or screen.** It is a SQL insert
-  (see SETUP §6). Without it, energy, cardio load, strain, sleep need, recovery's sleep
-  part and VO₂max are all withheld.
+- **The profile (DOB, sex, height, SR-PA)** is set in Settings → Profile (`GET`/`PUT
+  /v1/profile`, ours). A change re-derives the whole history. Without it, energy, cardio
+  load, strain, sleep need, recovery's sleep part and VO₂max are all withheld.
+- `rederive` deletes `derived_daily` rows its pass no longer produces (ours): a cleared
+  input must withhold, not leave yesterday's number behind. Ingest does not do this
+  (it can derive a day without its night).
 - **The correlations / caffeine-cutoff engine in spec/02 §3 was never ported.** The
   journal stores caffeine, alcohol and weight, but nothing analyses caffeine or alcohol yet.
 - `stress` (per 5 min) is collected and charted but used by no formula (spec/02 §5).

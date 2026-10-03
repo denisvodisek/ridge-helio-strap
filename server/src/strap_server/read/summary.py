@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from psycopg import Cursor
 
 from strap_server.derive import freshness, sleep_score, vo2max
-from strap_server.derive._common import _day_bounds_utc
+from strap_server.derive._common import _day_bounds_utc, _load_profile
 from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
 from strap_server.derive.robust import MAD_TO_SD, median, median_abs_deviation
 
@@ -26,16 +26,20 @@ BASELINE_MIN_POINTS = 5
 ILLNESS_ACTIVE_DAYS = 2  # a flag speaks for two days past its date (old read/health_metrics)
 
 _MESSAGES: dict[str, str] = {
-    freshness.NOT_DERIVED_YET: freshness.NOT_DERIVED_YET_MESSAGE,
     "no_data": "The strap recorded nothing for this yet.",
     **vo2max.WITHHOLD_MESSAGES,
     **sleep_score.SRI_MESSAGES,
     **sleep_score.SLEEP_DEBT_MESSAGES,
+    # Last, so it wins: the SRI and sleep-debt maps each word this id for their own card, and
+    # merged in they made every card's "not computed yet" say "sleep debt". Those two cards
+    # pass their own map to `withheld` instead.
+    freshness.NOT_DERIVED_YET: freshness.NOT_DERIVED_YET_MESSAGE,
 }
 
 
-def withheld(reason: str) -> dict:
-    return {"withheld": {"reason": reason, "message": _MESSAGES.get(reason, reason)}}
+def withheld(reason: str, messages: dict[str, str] | None = None) -> dict:
+    """A card's withheld state; `messages` words a reason for that one card, over the shared map."""
+    return {"withheld": {"reason": reason, "message": (messages or {}).get(reason) or _MESSAGES.get(reason, reason)}}
 
 
 # ── verbatim read-time science ─────────────────────────────────────────────────
@@ -83,10 +87,11 @@ def _baseline(cur: Cursor, user_id: UUID, day: date, metric: str, value: float) 
     return {"median": round(med, 1), "n": len(hist), "z": round((value - med) / sd, 2) if sd > 0 else None}
 
 
-def _metric_card(cur: Cursor, user_id: UUID, day: date, metric: str, digits: int = 0) -> dict:
+def _metric_card(cur: Cursor, user_id: UUID, day: date, metric: str, digits: int = 0, missing: str = freshness.NOT_DERIVED_YET) -> dict:
+    """The day's row with its 30-day baseline, or withheld for `missing` when there is none."""
     row = _row(cur, user_id, day, metric)
     if row is None:
-        return withheld(freshness.NOT_DERIVED_YET)
+        return withheld(missing)
     value, flags = row
     return {"value": round(value, digits) if digits else round(value), "flags": flags, "baseline": _baseline(cur, user_id, day, metric, value)}
 
@@ -173,10 +178,10 @@ def recovery_card(cur: Cursor, user_id: UUID, day: date, today: date) -> dict:
     return card
 
 
-def strain_card(cur: Cursor, user_id: UUID, day: date) -> dict:
+def strain_card(cur: Cursor, user_id: UUID, day: date, missing: str = freshness.NOT_DERIVED_YET) -> dict:
     row = _row(cur, user_id, day, "cardio_load")
     if row is None:
-        return withheld(freshness.NOT_DERIVED_YET)
+        return withheld(missing)
     cur.execute(
         "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY value) FROM derived_daily "
         "WHERE user_id = %s AND metric = 'cardio_load' AND value > 0 AND day >= %s AND day <= %s",
@@ -210,10 +215,12 @@ def sleep_card(cur: Cursor, user_id: UUID, tz: str, day: date, today: date) -> d
         "health": {"dimensions": score[0], "flags": score[1]} if score else withheld(freshness.NOT_DERIVED_YET),
         "need_min": need[0] if need else None,  # NSF 2015 by age; null without a date of birth
         "debt": {"minutes": debt[0], "flags": debt[1]} if debt else withheld(
-            sleep_score.sleep_debt_unavailable_reason(cur, user_id, tz, day, None) or freshness.NOT_DERIVED_YET
+            sleep_score.sleep_debt_unavailable_reason(cur, user_id, tz, day, None) or freshness.NOT_DERIVED_YET,
+            sleep_score.SLEEP_DEBT_MESSAGES,
         ),
         "regularity": {"sri": sri[0]} if sri else withheld(
-            sleep_score.sri_unavailable_reason(cur, user_id, tz, day, last_sri) or freshness.NOT_DERIVED_YET
+            sleep_score.sri_unavailable_reason(cur, user_id, tz, day, last_sri) or freshness.NOT_DERIVED_YET,
+            sleep_score.SRI_MESSAGES,
         ),
         "note_ids": ["no_validated_sleep_score", "wearable_sleep_stage_validity"],
     }
@@ -274,19 +281,23 @@ def day_summary(cur: Cursor, user_id: UUID, tz: str, day: date) -> dict:
     if stress:
         stress["usual"] = _usual_mean(cur, user_id, tz, day, "stress", until)
     steps = _metric_card(cur, user_id, day, "steps_total")
+    # Calories, distance and strain all spend the body (height, sex, age, weight): without
+    # it the reason is the profile, not a sync, and saying "sync the strap" would send the
+    # owner to do something that cannot bring the number back.
+    body = freshness.PROFILE_INCOMPLETE if _load_profile(cur, user_id, tz, day) is None else freshness.NOT_DERIVED_YET
     if until and "value" in steps:
         steps["usual_by_now"] = steps_usual_by(cur, user_id, tz, day, until)
     return {
         "date": day.isoformat(),
         "timezone": tz,
         "recovery": recovery_card(cur, user_id, day, today),
-        "strain": strain_card(cur, user_id, day),
+        "strain": strain_card(cur, user_id, day, body),
         "sleep": sleep_card(cur, user_id, tz, day, today),
         "steps": {
             "steps": steps,
-            "distance_m": _metric_card(cur, user_id, day, "distance_m_daily"),
-            "active_calories": _metric_card(cur, user_id, day, "active_calories"),
-            "total_calories": _metric_card(cur, user_id, day, "total_calories"),
+            "distance_m": _metric_card(cur, user_id, day, "distance_m_daily", missing=body),
+            "active_calories": _metric_card(cur, user_id, day, "active_calories", missing=body),
+            "total_calories": _metric_card(cur, user_id, day, "total_calories", missing=body),
             "mvpa_min": _metric_card(cur, user_id, day, "mvpa_min"),
         },
         "heart": {

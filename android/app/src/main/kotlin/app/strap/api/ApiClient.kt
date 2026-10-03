@@ -27,6 +27,10 @@ class ApiClient(private val link: ServerLink) {
 
     suspend fun addJournal(entry: JSONObject): JSONObject = JSONObject(request("POST", "/v1/journal", entry.toString()))
 
+    suspend fun profile(): JSONObject = get("/v1/profile")
+
+    suspend fun saveProfile(profile: JSONObject): JSONObject = JSONObject(request("PUT", "/v1/profile", profile.toString()))
+
     suspend fun deleteJournal(id: String) {
         request("DELETE", "/v1/journal/$id", null)
     }
@@ -38,7 +42,7 @@ class ApiClient(private val link: ServerLink) {
         try {
             conn.requestMethod = method
             conn.connectTimeout = 10_000
-            conn.readTimeout = 60_000 // a weight entry re-derives before answering
+            conn.readTimeout = 60_000 // a weight or profile change re-derives before answering
             conn.setRequestProperty("Authorization", "Bearer ${link.token}")
             if (body != null) {
                 conn.doOutput = true

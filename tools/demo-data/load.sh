@@ -19,10 +19,9 @@ printf 'POSTGRES_PASSWORD=%s\nOWNER_TIMEZONE=%s\nDEVICE_TOKEN_SHA256=%s\nRIDGE_P
 "${compose[@]}" up -d --build --wait db api
 
 python3 "$repo/tools/demo-data/generate.py" http://127.0.0.1:8767 "$token" --timezone "${DEMO_TIMEZONE:-Europe/Berlin}"
-# The profile (made up) has no API yet; then recompute every day with it in place.
-"${compose[@]}" exec -T db psql -q -U strap -d strap -c \
-    "INSERT INTO profile (user_id, height_cm, sex, dob, srpa) VALUES ('00000000-0000-0000-0000-000000000001', 176, 'male', '1991-05-12', 2) ON CONFLICT (user_id) DO UPDATE SET height_cm = 176, sex = 'male', dob = '1991-05-12', srpa = 2"
-"${compose[@]}" exec -T api python -m strap_server.rederive | tail -1
+# The profile (made up); setting it recomputes every day with it in place.
+curl -fsS -X PUT http://127.0.0.1:8767/v1/profile -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d '{"height_cm": 176, "sex": "male", "dob": "1991-05-12", "srpa": 2}' | python3 -c 'import json, sys; print("profile set,", json.load(sys.stdin)["rederived_days"], "days derived")'
 
 cat <<EOT
 
