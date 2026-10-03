@@ -180,6 +180,26 @@ Ask things like "how did my HRV trend over the last month?" or "compare my sleep
 logged alcohol". Query results are sent to Anthropic with each question; the database itself
 stays on your box.
 
+## 9 · The droplet (live since 2026-10-03)
+
+Ridge runs on Denis's DigitalOcean droplet in Singapore (`root@157.245.148.75`, 2 vCPU, 4 GB),
+next to ai-influencers/dockseek, without touching it:
+
+- Code in `/opt/ridge` (rsynced from this repo: no `.git`, no `android/`, no `.env`), its own
+  Compose project `ridge` (db, api, backup). API on `127.0.0.1:8766` only.
+- `/opt/ridge/deploy/.env` was generated on the box (its own DB password); the phone token
+  hash is the same as the Mac's, so one token works on both.
+- HTTPS through Tailscale (`tailscale serve --bg 8766`), node name `ridge-sgp`; not on the
+  public internet. Caddy, ports 80/443, `/opt/aiinf`, `/opt/agenthub` untouched; 8080 and
+  9000 stay closed.
+- Backups land in `/opt/ridge/deploy/backups/` nightly (14 kept).
+
+Update it from the Mac:
+
+```bash
+cd ~/Development/ridge-helio-strap && rsync -az --exclude .git --exclude android --exclude '**/.venv' --exclude 'deploy/.env' --exclude 'deploy/backups' ./ root@157.245.148.75:/opt/ridge/ && ssh root@157.245.148.75 'cd /opt/ridge/deploy && docker compose up -d --build'
+```
+
 ## Updating the server
 
 ```sh
