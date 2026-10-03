@@ -1,7 +1,6 @@
 package app.strap.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,27 +24,25 @@ import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
 
 /**
- * The connected button group (replaces SegmentedButton): 40 dp buttons 2 dp apart, outer
- * corners 12 and inner 6 (rounded rectangles, DESIGN v2); the selected one fills with `primary`.
+ * A row of choices (replaces SegmentedButton): equal 40 dp segments, 6 dp apart, every one the
+ * same 12 dp rounded rectangle. Only the fill says which is chosen (DESIGN v2), so nothing
+ * changes shape as the selection moves.
  */
 @Composable
 fun <T> ConnectedButtons(options: List<T>, selected: T, label: (T) -> String, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val idle = LocalRidgeColors.current.surface3
-    Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        options.forEachIndexed { i, o ->
+    val shape = RoundedCornerShape(12.dp)
+    Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { o ->
             val on = o == selected
-            val start by animateDpAsState(if (on || i == 0) 12.dp else 6.dp, tween(200))
-            val end by animateDpAsState(if (on || i == options.lastIndex) 12.dp else 6.dp, tween(200))
             val bg by animateColorAsState(if (on) scheme.primary else idle, tween(200))
             val fg by animateColorAsState(if (on) scheme.onPrimary else scheme.onSurfaceVariant, tween(200))
             Box(
-                Modifier.weight(1f).height(40.dp)
-                    .clip(RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end))
-                    .background(bg)
+                Modifier.weight(1f).height(40.dp).clip(shape).background(bg)
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(o) }),
                 contentAlignment = Alignment.Center,
-            ) { Text(label(o), style = RidgeType.label, color = fg) }
+            ) { Text(label(o), style = RidgeType.label, color = fg, maxLines = 1) }
         }
     }
 }

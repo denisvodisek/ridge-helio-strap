@@ -179,7 +179,7 @@ fun StrapStep(app: StrapApp, onCancel: (() -> Unit)? = null, onSaved: () -> Unit
             supportingText = error?.let { { Text(it) } },
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = {
+            FilledTonalButton(shape = MaterialTheme.shapes.medium, onClick = {
                 scope.launch {
                     val text = clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim() ?: return@launch
                     error = null
@@ -229,7 +229,7 @@ fun ServerStep(app: StrapApp, onCancel: (() -> Unit)? = null, onSaved: () -> Uni
             supportingText = { Text("${token.trim().length}/64", modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.End) },
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = !testing, onClick = {
+            OutlinedButton(enabled = !testing, shape = MaterialTheme.shapes.medium, onClick = {
                 val link = ServerLink.parse(url, token)
                 if (link == null) {
                     result = "Needs an https address and the 64-character token."

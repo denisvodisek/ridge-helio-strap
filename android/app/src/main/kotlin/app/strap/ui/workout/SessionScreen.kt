@@ -144,7 +144,7 @@ fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp), shape = MaterialTheme.shapes.medium,
             ) {
                 Icon(RidgeIcons.delete, null)
                 Text("  Delete workout")
