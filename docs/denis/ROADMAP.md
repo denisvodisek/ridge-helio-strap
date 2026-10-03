@@ -77,7 +77,7 @@ S = a session or two · M = a few sessions · L = a project in itself.
 1. ✅ **Profile screen + API** (S, done 2026-10-03, branch `feat/profile-screen`). `GET/PUT /v1/profile` and a Settings → Profile screen; on
    change, rederive the affected days. Unblocks energy, cardio load, strain, sleep need,
    VO₂max and biological age. Upstream would likely take this as a PR.
-2. **Sync when the app opens** (S). Start `SyncService` on the app's `ON_START` if the last
+2. ✅ **Sync when the app opens** (S, done 2026-10-03, DD1). Start `SyncService` on the app's `ON_START` if the last
    sync is older than ~15 min (a cooldown, so flipping between apps doesn't hammer the
    strap). `SyncRunner` already refuses a second sync while one runs.
 3. **Background sync** (M). A WorkManager periodic job (every 1–2 h, Android picks the

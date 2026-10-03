@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.strap.api.ApiClient
 import app.strap.api.ApiException
+import app.strap.sync.AutoSync
 import app.strap.sync.SyncService
 import app.strap.sync.SyncState
 import app.strap.ui.Centered
@@ -132,6 +133,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val app = application as StrapApp
         setContent { StrapTheme { AppShell(app) } }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AutoSync.onAppVisible(application as StrapApp)
     }
 }
 

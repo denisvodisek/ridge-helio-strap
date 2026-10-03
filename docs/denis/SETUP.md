@@ -152,7 +152,7 @@ Baselines need history, so the app fills in over time:
 | 28 days | ACWR (load spike) |
 | ~90 days | Strain scale fully personal (90-day P95) |
 
-Sync is manual: press Sync in the morning and whenever you want fresh numbers.
+Opening the app syncs (at most every 15 min); pull down on any tab to sync right now.
 
 ## Updating the server
 

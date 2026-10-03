@@ -85,7 +85,8 @@ docker compose exec api python -m strap_server.rederive
 - **The correlations / caffeine-cutoff engine in spec/02 §3 was never ported.** The
   journal stores caffeine, alcohol and weight, but nothing analyses caffeine or alcohol yet.
 - `stress` (per 5 min) is collected and charted but used by no formula (spec/02 §5).
-- Sync is manual by upstream decision (D19). Nothing runs in the background.
+- Sync runs when the app opens (15 min cooldown, `sync/AutoSync.kt`, our DD1 overriding
+  upstream D19). Nothing runs in the background yet (roadmap #3).
 - One owner per server; the owner id is the constant `00000000-0000-0000-0000-000000000001`
   (`server/src/strap_server/config.py`).
 - Installing upstream's signed APK and later your own build won't upgrade in place
