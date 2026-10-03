@@ -21,9 +21,9 @@ from uuid import UUID
 import psycopg
 from mcp.server.mcpserver import MCPServer
 
-from strap_server import journal, profile
-from strap_server.api import _local_bounds
+from strap_server import journal, profile, sessions
 from strap_server.config import get_settings
+from strap_server.derive._common import _day_bounds_utc
 from strap_server.read import history, series, summary
 
 QUERY_ROW_LIMIT = 500
@@ -60,6 +60,11 @@ def _connect() -> psycopg.Connection:
 def _tz(conn: psycopg.Connection) -> str:
     row = conn.execute("SELECT timezone FROM app_user WHERE id = %s", (_owner(),)).fetchone()
     return row[0] if row else get_settings().owner_timezone
+
+
+def _local_bounds(tz: str, first: date, last: date) -> tuple[datetime, datetime]:
+    """[first local midnight, the midnight after last) in UTC, as the API's range reads use."""
+    return _day_bounds_utc(first, tz)[0], _day_bounds_utc(last, tz)[1]
 
 
 def _plain(value: Any) -> Any:
@@ -112,6 +117,17 @@ def workouts(start: str, end: str) -> list[dict]:
     with _connect() as conn, conn.cursor() as cur:
         first, last = _local_bounds(_tz(conn), date.fromisoformat(start), date.fromisoformat(end))
         return _plain(history.workouts(cur, _owner(), first, last))
+
+
+@mcp.tool()
+def workout_sessions(start: str, end: str) -> list[dict]:
+    """Workout sessions (started or logged in Ridge, confirmed suggestions, and the strap's own
+    workouts) starting in [start, end], newest first, each with avg/peak HR, TRIMP load, zone
+    minutes, strain (0-21) and HR recovery, or the reason one is withheld."""
+    with _connect() as conn, conn.cursor() as cur:
+        tz = _tz(conn)
+        first, last = _local_bounds(tz, date.fromisoformat(start), date.fromisoformat(end))
+        return _plain(sessions.list_range(cur, _owner(), tz, first, last))
 
 
 @mcp.tool()

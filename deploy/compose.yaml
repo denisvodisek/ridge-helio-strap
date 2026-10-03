@@ -33,6 +33,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
       OWNER_TIMEZONE: ${OWNER_TIMEZONE:-UTC}
       DEVICE_TOKEN_SHA256: ${DEVICE_TOKEN_SHA256:?run deploy/new-token.sh first}
+      # Ask your data (optional): without a key the chat says how to add one.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-deepseek/deepseek-v4.1-flash}
     # Plain HTTP: keep it on loopback (or a private address) and put a TLS reverse proxy in
     # front; the app only talks HTTPS. Docker's port rules bypass host firewalls like ufw.
     ports:

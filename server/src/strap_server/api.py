@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from pydantic import BaseModel
 
-from strap_server import journal, profile, sessions
+from strap_server import chat, journal, profile, sessions
 from strap_server.config import Settings, get_settings
 from strap_server.db import connection
 from strap_server.ingest.models import IngestPayload, IngestSummary
@@ -250,6 +250,21 @@ def dismiss_suggestion(body: Dismissal, user_id: Annotated[UUID, Depends(owner)]
     with connection() as conn:
         sessions.dismiss(conn, user_id, body.start)
     return {"dismissed": body.start.isoformat()}
+
+
+@app.post("/v1/chat")
+def post_chat(
+    body: chat.ChatIn,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    """Ask your data: the model answers from read-only tool results (DD2)."""
+    with connection() as conn:
+        tz = _owner_tz(conn, user_id, settings)
+    try:
+        return chat.answer(body, tz)
+    except chat.ChatUnavailable as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from e
 
 
 @app.post("/v1/ingest")

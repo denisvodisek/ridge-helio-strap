@@ -43,6 +43,10 @@ class ApiClient(private val link: ServerLink) {
         request("POST", "/v1/sessions/suggestions/dismiss", JSONObject().put("start", start).toString())
     }
 
+    /** Ask your data: the server runs the model's tool calls, which can take a while. */
+    suspend fun chat(messages: JSONArray): JSONObject =
+        JSONObject(request("POST", "/v1/chat", JSONObject().put("messages", messages).toString(), readTimeoutMs = 120_000))
+
     suspend fun profile(): JSONObject = get("/v1/profile")
 
     suspend fun saveProfile(profile: JSONObject): JSONObject = JSONObject(request("PUT", "/v1/profile", profile.toString()))
@@ -53,12 +57,12 @@ class ApiClient(private val link: ServerLink) {
 
     private suspend fun get(path: String): JSONObject = JSONObject(request("GET", path, null))
 
-    private suspend fun request(method: String, path: String, body: String?): String = withContext(Dispatchers.IO) {
+    private suspend fun request(method: String, path: String, body: String?, readTimeoutMs: Int = 60_000): String = withContext(Dispatchers.IO) {
         val conn = URL(link.baseUrl + path).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
             conn.connectTimeout = 10_000
-            conn.readTimeout = 60_000 // a weight or profile change re-derives before answering
+            conn.readTimeout = readTimeoutMs // a weight or profile change re-derives before answering
             conn.setRequestProperty("Authorization", "Bearer ${link.token}")
             if (body != null) {
                 conn.doOutput = true
@@ -68,6 +72,8 @@ class ApiClient(private val link: ServerLink) {
             when (val code = conn.responseCode) {
                 200 -> conn.inputStream.bufferedReader().use { it.readText() }
                 401 -> throw ApiException("The server refused the token.")
+                503 -> throw ApiException(runCatching { JSONObject(conn.errorStream.bufferedReader().readText()).getString("detail") }.getOrNull()
+                    ?: "The server can't answer that right now.")
                 else -> throw ApiException("The server answered HTTP $code.")
             }
         } catch (e: IOException) {

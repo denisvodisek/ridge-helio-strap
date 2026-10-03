@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material.icons.outlined.Watch
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -106,6 +107,7 @@ import app.strap.ui.Centered
 import app.strap.ui.DiagnosticsScreen
 import app.strap.ui.Loading
 import app.strap.ui.activity.ActivityScreen
+import app.strap.ui.ask.AskScreen
 import app.strap.ui.components.Info
 import app.strap.ui.components.InfoSheet
 import app.strap.ui.components.Infos
@@ -182,6 +184,8 @@ private sealed interface Pushed {
     data object Diagnostics : Pushed
 
     data object Profile : Pushed
+
+    data object Ask : Pushed
 
     /** One workout session (the server's JSON, refreshed by the screen after an edit). */
     data class Session(val json: JSONObject) : Pushed
@@ -337,6 +341,7 @@ private fun AppShell(app: StrapApp) {
         Pushed.Settings -> "Settings"
         Pushed.Diagnostics -> "Diagnostics"
         Pushed.Profile -> "Profile"
+        Pushed.Ask -> "Ask"
         is Pushed.Session -> Sport.of(top.json.getString("sport")).label
         else -> when (tab) {
             Tab.TODAY -> dayTitle(day)
@@ -381,6 +386,7 @@ private fun AppShell(app: StrapApp) {
                                 top == null -> {
                                     if (tab == Tab.TODAY) IconButton(onClick = { picking = true }) { Icon(Icons.Outlined.CalendarMonth, "Pick a day", tint = muted) }
                                     if (tab == Tab.JOURNAL) IconButton(onClick = { sheet = Infos.journal }) { Icon(Icons.Outlined.Info, "About the journal", tint = muted) }
+                                    IconButton(onClick = { push(Pushed.Ask) }) { Icon(Icons.Rounded.AutoAwesome, "Ask about your data", tint = MaterialTheme.colorScheme.primary) }
                                     IconButton(onClick = { push(Pushed.Settings) }) { Icon(Icons.Outlined.Settings, "Settings", tint = muted) }
                                 }
                             }
@@ -453,6 +459,7 @@ private fun AppShell(app: StrapApp) {
                     top == Pushed.Diagnostics -> DiagnosticsScreen(app)
                     api == null -> Centered("Add your server in Settings (the gear) first.")
                     top == Pushed.Profile -> ProfileScreen(api)
+                    top == Pushed.Ask -> AskScreen(api)
                     top is Pushed.Session -> SessionScreen(api, top.json) { stack.removeAt(stack.lastIndex); sessionsVersion++ }
                     top is Pushed.Detail -> MetricDetailScreen(api, top.metric, day)
                     top == Pushed.Recovery -> today?.takeIf { it.day == day }?.let { RecoveryContent(it) { d -> day = d } } ?: Loading(todayError)

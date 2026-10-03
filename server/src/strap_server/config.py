@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     owner_timezone: str = "UTC"
     # SHA-256 hex of the phone's bearer token. The token itself is never stored here.
     device_token_sha256: str = ""
+    # Ask your data (DD2): the OpenRouter key stays on the server; the phone never sees it.
+    openrouter_api_key: str = ""
+    chat_model: str = "deepseek/deepseek-v4.1-flash"
 
     def conninfo(self) -> str:
         return (
