@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from strap_server import chat, journal, profile, sessions
 from strap_server.config import Settings, get_settings
@@ -217,8 +217,11 @@ def patch_session(
     user_id: Annotated[UUID, Depends(owner)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
-    with connection() as conn:
-        out = sessions.update(conn, user_id, _owner_tz(conn, user_id, settings), session_id, body)
+    try:
+        with connection() as conn:
+            out = sessions.update(conn, user_id, _owner_tz(conn, user_id, settings), session_id, body)
+    except ValidationError as e:  # the merged window broke a SessionIn rule: the edit is refused, nothing written
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, e.errors()[0]["msg"].removeprefix("Value error, ")) from e
     if out is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
     return out
@@ -226,6 +229,7 @@ def patch_session(
 
 @app.delete("/v1/sessions/{session_id}")
 def delete_session(session_id: str, user_id: Annotated[UUID, Depends(owner)]) -> dict:
+    """Deletes a session; a strap workout (`strap:<ms>`) is hidden instead, so a re-sync can't bring it back."""
     with connection() as conn:
         if not sessions.delete(conn, user_id, session_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")

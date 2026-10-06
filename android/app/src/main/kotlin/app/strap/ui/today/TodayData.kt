@@ -56,6 +56,21 @@ data class DayCurves(val dayStart: Long, val hr: List<Slice>, val stress: List<S
 
 const val SLICE_MS = 10 * 60_000L
 
+/**
+ * The day's calories (docs/denis/SPEC.md S6): the resting [base] and what steps, everyday
+ * movement and workouts added on top. [until] is set while the day is still running.
+ */
+data class Calories(
+    val total: Int,
+    val base: Int,
+    val steps: Int,
+    val movement: Int,
+    val workouts: Int,
+    val workoutsN: Int,
+    val until: Long?,
+    val caveats: List<String>,
+)
+
 /** The main night that ended on the day. */
 data class Night(val start: Long, val end: Long, val deviceScore: Int?)
 
@@ -85,6 +100,9 @@ data class TodayData(
     val illness: String?,
     val journal: List<JSONObject>,
     val workouts: List<JSONObject>,
+    val calories: Calories?,
+    /** Why there are no calories, when [calories] is null. */
+    val caloriesWithheld: String?,
 ) {
     /** The seven strip days, oldest first. */
     val stripDays: List<LocalDate> get() = (6 downTo 0).map { stripEnd.minusDays(it.toLong()) }
@@ -116,6 +134,13 @@ private fun slices(points: JSONArray, dayStart: Long): List<Slice> =
 
 private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 
+private fun calories(o: JSONObject?): Calories? = o?.takeIf { !it.has("withheld") }?.let { c ->
+    val parts = c.getJSONObject("parts")
+    Calories(c.getInt("total"), c.getInt("base"), parts.getInt("steps"), parts.getInt("movement"), parts.getInt("workouts"),
+        c.getInt("workouts_n"), if (c.isNull("until")) null else c.getLong("until"),
+        c.optJSONArray("caveats")?.objects()?.map { it.getString("message") }.orEmpty())
+}
+
 private fun JSONObject.num(key: String): Double? = if (isNull(key)) null else optDouble(key).takeIf { !it.isNaN() }
 
 /** The week strip shows the last seven days, or the week ending on an older picked day. */
@@ -126,7 +151,7 @@ suspend fun loadToday(api: ApiClient, day: LocalDate): TodayData = coroutineScop
     val summaryCall = async { api.summary(day) }
     val recoveryCall = async { api.daily("recovery_score", stripEnd.minusDays(13), stripEnd) }
     val journalCall = async { api.journal(day, day) }
-    val workoutsCall = async { api.workouts(day, day) }
+    val workoutsCall = async { api.sessions(day, day) } // yours and the strap's, as edited (SPEC S3)
     val seriesCall = async { api.daySeries(day, "hr,stress") }
     val s = summaryCall.await()
     val sleep = s.getJSONObject("sleep")
@@ -178,5 +203,7 @@ suspend fun loadToday(api: ApiClient, day: LocalDate): TodayData = coroutineScop
         illness = s.optJSONObject("illness")?.getString("framing"),
         journal = journalCall.await().objects(),
         workouts = workoutsCall.await().objects(),
+        calories = calories(s.optJSONObject("calories")),
+        caloriesWithheld = s.optJSONObject("calories")?.optJSONObject("withheld")?.getString("message"),
     )
 }

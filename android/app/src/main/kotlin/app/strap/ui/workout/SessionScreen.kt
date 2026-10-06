@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +37,7 @@ import app.strap.ui.components.Bar
 import app.strap.ui.components.CardHeader
 import app.strap.ui.components.DayLineChart
 import app.strap.ui.components.GaugeBlock
+import app.strap.ui.components.ListRow
 import app.strap.ui.components.LocalSnackbar
 import app.strap.ui.components.Note
 import app.strap.ui.components.Point
@@ -43,7 +46,9 @@ import app.strap.ui.components.SectionLabel
 import app.strap.ui.components.SideStat
 import app.strap.ui.components.Subtle
 import app.strap.ui.components.clockOf
+import app.strap.ui.components.groupShape
 import app.strap.ui.theme.LocalMetricColors
+import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeIcons
 import app.strap.ui.theme.RidgeType
 import java.time.Instant
@@ -53,20 +58,39 @@ import org.json.JSONObject
 
 /**
  * One workout: strain on the day's own 0–21 scale, the HR curve across the session, time in
- * each zone and how fast HR came down after (SPEC S3). Your own sessions can change sport or
- * be deleted; the strap's are shown as recorded.
+ * each zone and how fast HR came down after (SPEC S3). Any workout can change sport or time,
+ * or be deleted. Editing one the strap recorded makes it yours, and the next sync keeps it.
  */
 @Composable
-fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
+fun SessionScreen(api: ApiClient, initial: JSONObject, onChanged: (JSONObject) -> Unit, onGone: () -> Unit) {
     var s by remember { mutableStateOf(initial) }
     var points by remember { mutableStateOf<List<Point>?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var editingTime by remember { mutableStateOf(false) }
+    var confirmingDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snack = LocalSnackbar.current
     val haptics = LocalHapticFeedback.current
     val c = LocalMetricColors.current
     val start = s.getLong("start")
     val end = s.getLong("end")
-    val own = s.getString("source") != "strap"
+    val fromStrap = s.getString("source") == "strap"
+    // One save at a time: the first edit of a strap workout gives it a new id the next one needs.
+    fun save(patch: JSONObject) {
+        if (saving) return
+        saving = true
+        scope.launch {
+            try {
+                s = api.updateSession(s.getString("id"), patch)
+                onChanged(s)
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            } catch (e: ApiException) {
+                snack(e.message ?: "Could not save.", null, null)
+            } finally {
+                saving = false
+            }
+        }
+    }
     LaunchedEffect(start, end) {
         points = try {
             // The server cuts days in its owner's timezone, which needn't be the phone's: a session
@@ -113,37 +137,21 @@ fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
         item { Zones(load, stats?.optJSONObject("load")?.optJSONObject("withheld")?.getString("message")) }
         item { Recovery(stats?.optJSONObject("hrr")) }
         item {
-            SectionLabel(if (own) "Sport" else "Recorded by the strap")
-            if (own) {
-                Column(Modifier.padding(top = 8.dp)) {
-                    SportGrid(Sport.entries, Sport.of(s.getString("sport"))) { pick ->
-                        scope.launch {
-                            try {
-                                s = api.updateSession(s.getString("id"), JSONObject().put("sport", pick.key))
-                                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                            } catch (e: ApiException) {
-                                snack(e.message ?: "Could not save.", null, null)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Subtle("The strap's own sport codes aren't mapped yet, so it shows as Other.", Modifier.padding(top = 4.dp))
+            SectionLabel("Sport", if (fromStrap) "recorded by the strap" else null)
+            Column(Modifier.padding(top = 8.dp)) {
+                SportGrid(Sport.entries, Sport.of(s.getString("sport"))) { pick -> save(JSONObject().put("sport", pick.key)) }
             }
         }
-        if (own) item {
+        item {
+            SectionLabel("Time")
+            Column(Modifier.padding(top = 8.dp)) {
+                ListRow(groupShape(0, 1), "${clockOf(start)}–${clockOf(end)}", durationLabel(end - start), onClick = { editingTime = true },
+                    trailing = { Text("Change", style = RidgeType.label, color = MaterialTheme.colorScheme.primary) })
+            }
+        }
+        item {
             OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        try {
-                            api.deleteSession(s.getString("id"))
-                            snack("Workout deleted", null, null)
-                            onGone()
-                        } catch (e: ApiException) {
-                            snack(e.message ?: "Could not delete.", null, null)
-                        }
-                    }
-                },
+                onClick = { confirmingDelete = true },
                 modifier = Modifier.fillMaxWidth().height(52.dp), shape = MaterialTheme.shapes.medium,
             ) {
                 Icon(RidgeIcons.delete, null)
@@ -151,6 +159,33 @@ fun SessionScreen(api: ApiClient, initial: JSONObject, onGone: () -> Unit) {
             }
         }
     }
+    if (editingTime) TimeSheet(start, end, onDismiss = { editingTime = false }) { from, to ->
+        editingTime = false
+        val zone = ZoneId.systemDefault()
+        save(JSONObject().put("start", from.atZone(zone).toOffsetDateTime().toString()).put("end", to.atZone(zone).toOffsetDateTime().toString()))
+    }
+    if (confirmingDelete) AlertDialog(
+        onDismissRequest = { confirmingDelete = false },
+        title = { Text("Delete this workout?") },
+        // A strap workout's row stays in the strap's record, hidden, so the next sync can't bring it back.
+        text = { Text(if (fromStrap) "The strap's record is kept, but this workout won't come back after a sync." else "This can't be undone.") },
+        confirmButton = {
+            TextButton(onClick = {
+                confirmingDelete = false
+                scope.launch {
+                    try {
+                        api.deleteSession(s.getString("id"))
+                        snack("Workout deleted", null, null)
+                        onGone()
+                    } catch (e: ApiException) {
+                        snack(e.message ?: "Could not delete.", null, null)
+                    }
+                }
+            }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") } },
+        containerColor = LocalRidgeColors.current.surface3,
+    )
 }
 
 @Composable

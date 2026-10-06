@@ -5,6 +5,9 @@ Only a session's window and sport are stored. Its load, zones, strain and HR rec
 computed when it is read, from the per-minute HR already in `sample`, with the day's own
 definitions (`derive/cardio_load.py`'s accumulator, `read/summary.py`'s strain scale), so a
 session can never score differently from the day it sits in.
+
+A strap workout (id `strap:<start ms>`) is never written here: deleting one hides it, and
+editing one hides it and makes it a session with source 'strap' (migration 0003).
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ SUGGEST_MAX_DIP_MINUTES = 3
 # Zepp/strap workout type codes -> Ridge sports (SPEC S3), confirmed by the owner against his
 # own sessions in the Zepp export (2026-10-03). Unknown codes stay "other", their code kept.
 ZEPP_SPORTS = {17: "tennis", 52: "gym", 54: "stairs", 8: "treadmill", 6: "walk"}
+STRAP_ID = "strap:"
+# A strap workout the owner hasn't deleted or edited (those are hidden; an edit lives on as a session).
+VISIBLE_WORKOUT_SQL = "NOT EXISTS (SELECT 1 FROM workout_hidden h WHERE h.user_id = workout.user_id AND h.start_ts = workout.start_ts)"
 NO_HR = "no_hr_in_window"
 NO_RHR = "no_measured_rhr"
 MESSAGES = {
@@ -125,7 +131,7 @@ def _hr_recovery(cur: Cursor, user_id: UUID, end: datetime) -> dict | None:
         return None
     cur.execute(
         "SELECT 1 FROM session WHERE user_id = %(u)s AND start_ts > %(e)s AND start_ts <= %(e2)s "
-        "UNION ALL SELECT 1 FROM workout WHERE user_id = %(u)s AND start_ts > %(e)s AND start_ts <= %(e2)s LIMIT 1",
+        f"UNION ALL SELECT 1 FROM workout WHERE user_id = %(u)s AND start_ts > %(e)s AND start_ts <= %(e2)s AND {VISIBLE_WORKOUT_SQL} LIMIT 1",
         {"u": user_id, "e": end, "e2": end + timedelta(minutes=2)},
     )
     if cur.fetchone():
@@ -147,11 +153,12 @@ def list_range(cur: Cursor, user_id: UUID, tz: str, first: datetime, last: datet
     )
     items = [_row(r) for r in cur.fetchall()]
     cur.execute(
-        "SELECT start_ts, duration_s, sport FROM workout WHERE user_id = %s AND start_ts >= %s AND start_ts < %s AND duration_s > 0",
+        "SELECT start_ts, duration_s, sport FROM workout WHERE user_id = %s AND start_ts >= %s AND start_ts < %s AND duration_s > 0 "
+        f"AND {VISIBLE_WORKOUT_SQL}",
         (user_id, first, last),
     )
     for start, dur, code in cur.fetchall():
-        items.append({"id": f"strap:{int(start.timestamp() * 1000)}", "sport": ZEPP_SPORTS.get(code, "other"), "strap_sport_code": code,
+        items.append({"id": f"{STRAP_ID}{int(start.timestamp() * 1000)}", "sport": ZEPP_SPORTS.get(code, "other"), "strap_sport_code": code,
                       "start": int(start.timestamp() * 1000), "end": int((start + timedelta(seconds=dur)).timestamp() * 1000),
                       "source": "strap", "notes": None})
     for it in items:
@@ -159,11 +166,11 @@ def list_range(cur: Cursor, user_id: UUID, tz: str, first: datetime, last: datet
     return sorted(items, key=lambda it: it["start"], reverse=True)
 
 
-def create(conn: Connection, user_id: UUID, tz: str, s: SessionIn) -> dict:
+def create(conn: Connection, user_id: UUID, tz: str, s: SessionIn, source: str | None = None) -> dict:
     r = conn.execute(
         "INSERT INTO session (user_id, sport, start_ts, end_ts, source, notes) VALUES (%s, %s, %s, %s, %s, %s) "
         "RETURNING id, sport, start_ts, end_ts, source, notes",
-        (user_id, s.sport, s.start, s.end, s.source, s.notes),
+        (user_id, s.sport, s.start, s.end, source or s.source, s.notes),
     ).fetchone()
     out = _row(r)
     with conn.cursor() as cur:
@@ -171,12 +178,40 @@ def create(conn: Connection, user_id: UUID, tz: str, s: SessionIn) -> dict:
     return out
 
 
+def _strap_start(session_id: str) -> datetime | None:
+    """The start a `strap:<ms>` id names; None for a session's own id."""
+    ms = session_id.removeprefix(STRAP_ID)
+    return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(milliseconds=int(ms)) if ms != session_id and ms.isdigit() else None
+
+
+def _hide(conn: Connection, user_id: UUID, start: datetime) -> tuple | None:
+    """Hides the strap workout starting at `start`: its (start, duration_s, sport code), or None
+    when there is no such workout or it is hidden already."""
+    return conn.execute(
+        "WITH w AS (SELECT start_ts, duration_s, sport FROM workout "
+        "           WHERE user_id = %(u)s AND date_trunc('milliseconds', start_ts) = %(s)s AND duration_s > 0), "
+        "h AS (INSERT INTO workout_hidden (user_id, start_ts) SELECT %(u)s, start_ts FROM w ON CONFLICT DO NOTHING RETURNING start_ts) "
+        "SELECT w.* FROM w JOIN h USING (start_ts)",
+        {"u": user_id, "s": start},
+    ).fetchone()
+
+
 def update(conn: Connection, user_id: UUID, tz: str, session_id: str, patch: SessionPatch) -> dict | None:
-    r = conn.execute("SELECT sport, start_ts, end_ts, source, notes FROM session WHERE user_id = %s AND id::text = %s", (user_id, session_id)).fetchone()
+    if (strap := _strap_start(session_id)) is not None:
+        # Editing what the strap recorded makes it a session the owner owns; the original stays
+        # in `workout`, hidden, so a re-sync can't put it back. Atomic: a refused edit rolls back the hide.
+        w = _hide(conn, user_id, strap)
+        if w is None:
+            return None
+        start, dur, code = w
+        made = SessionIn(sport=patch.sport or ZEPP_SPORTS.get(code, "other"), start=patch.start or start,
+                         end=patch.end or start + timedelta(seconds=dur), notes=patch.notes)
+        return create(conn, user_id, tz, made, source="strap")
+    r = conn.execute("SELECT sport, start_ts, end_ts, notes FROM session WHERE user_id = %s AND id::text = %s", (user_id, session_id)).fetchone()
     if r is None:
         return None
-    merged = SessionIn(sport=patch.sport or r[0], start=patch.start or r[1], end=patch.end or r[2], source=r[3],
-                       notes=patch.notes if patch.notes is not None else r[4])
+    merged = SessionIn(sport=patch.sport or r[0], start=patch.start or r[1], end=patch.end or r[2],
+                       notes=patch.notes if patch.notes is not None else r[3])
     row = conn.execute(
         "UPDATE session SET sport = %s, start_ts = %s, end_ts = %s, notes = %s WHERE user_id = %s AND id::text = %s "
         "RETURNING id, sport, start_ts, end_ts, source, notes",
@@ -189,6 +224,8 @@ def update(conn: Connection, user_id: UUID, tz: str, session_id: str, patch: Ses
 
 
 def delete(conn: Connection, user_id: UUID, session_id: str) -> bool:
+    if (strap := _strap_start(session_id)) is not None:
+        return _hide(conn, user_id, strap) is not None
     return conn.execute("DELETE FROM session WHERE user_id = %s AND id::text = %s", (user_id, session_id)).rowcount > 0
 
 
@@ -212,6 +249,7 @@ def suggestions(cur: Cursor, user_id: UUID, tz: str, day) -> list[dict]:
     busy = _sleep_windows(cur, user_id, start, end)
     cur.execute("SELECT start_ts, end_ts FROM session WHERE user_id = %s AND end_ts > %s AND start_ts < %s", (user_id, start, end))
     busy += cur.fetchall()
+    # Hidden strap workouts too: deleting one says it wasn't a workout, so it isn't offered back.
     cur.execute(
         "SELECT start_ts, start_ts + make_interval(secs => duration_s) FROM workout WHERE user_id = %s AND start_ts < %s "
         "AND start_ts + make_interval(secs => duration_s) > %s",

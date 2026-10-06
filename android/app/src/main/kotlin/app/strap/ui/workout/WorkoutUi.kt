@@ -136,6 +136,49 @@ fun WorkoutSheet(store: WorkoutStore, onDismiss: () -> Unit, onStart: (Sport) ->
 }
 
 /**
+ * A workout's start and end, to fix a forgotten Stop or a strap that began late. Both are on
+ * the day it started; an end at or before the start is after midnight. The server's limits
+ * (SPEC S3: forwards, at most 12 h, not starting in the future) are checked here first.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimeSheet(start: Long, end: Long, onDismiss: () -> Unit, onSave: (Instant, Instant) -> Unit) {
+    val zone = ZoneId.systemDefault()
+    val began = remember(start) { Instant.ofEpochMilli(start).atZone(zone) }
+    val ended = remember(end) { Instant.ofEpochMilli(end).atZone(zone) }
+    val from = rememberTimePickerState(began.hour, began.minute, is24Hour = true)
+    val to = rememberTimePickerState(ended.hour, ended.minute, is24Hour = true)
+    // A time left alone keeps its exact second; only a moved one lands on the minute.
+    val newStart = if (from.hour == began.hour && from.minute == began.minute) began.toInstant()
+        else began.toLocalDate().atTime(from.hour, from.minute).atZone(zone).toInstant()
+    val newEnd = if (to.hour == ended.hour && to.minute == ended.minute) ended.toInstant()
+        else began.toLocalDate().atTime(to.hour, to.minute).atZone(zone).toInstant().let { if (it.isAfter(newStart)) it else it.plusSeconds(86_400) }
+    val ms = newEnd.toEpochMilli() - newStart.toEpochMilli()
+    val problem = when {
+        ms <= 0 -> "It has to end after it starts."
+        newStart.isAfter(Instant.now()) -> "It can't start in the future."
+        ms > 12 * 3_600_000L -> "A workout lasts at most 12 hours."
+        else -> null
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = LocalRidgeColors.current.card) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Time", style = RidgeType.sheetTitle)
+            Text("Started at", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TimeInput(from)
+            Text("Ended at", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TimeInput(to)
+            Subtle(problem ?: durationLabel(ms))
+            Button(
+                onClick = { onSave(newStart, newEnd) },
+                enabled = problem == null && (newStart.toEpochMilli() != start || newEnd.toEpochMilli() != end),
+                modifier = Modifier.fillMaxWidth().height(56.dp), shape = MaterialTheme.shapes.medium,
+            ) { Text("Save", style = RidgeType.cardTitle) }
+        }
+    }
+}
+
+/**
  * The workout in progress, pinned above the screen: sport, a timer that ticks every second, and
  * Stop. The timer is "now − start", so it's right after the app was closed, killed or rebooted.
  */

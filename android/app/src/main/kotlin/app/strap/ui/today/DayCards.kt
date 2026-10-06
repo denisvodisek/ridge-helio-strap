@@ -226,3 +226,59 @@ private fun DayStrip(dayStart: Long, sleep: List<Span>, draw: DrawScope.(x: (Lon
         HourAxis()
     }
 }
+
+/**
+ * Calories: the resting base, then what steps, everyday movement and workouts added on top
+ * (docs/denis/SPEC.md S6), as one stacked bar and a row per part. A day still running says
+ * "so far", because only the minutes up to now are counted.
+ */
+@Composable
+internal fun CaloriesCard(data: TodayData) {
+    val c = LocalMetricColors.current
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val cal = data.calories
+    RidgeCard(spacing = 12.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Calories", style = RidgeType.cardTitle, modifier = Modifier.weight(1f))
+            cal?.let { Text(it.until?.let { t -> "so far · ${clockOf(t)}" } ?: "whole day", style = RidgeType.caption, color = muted) }
+        }
+        if (cal == null) {
+            Subtle(data.caloriesWithheld ?: "Not worked out for this day yet.")
+            return@RidgeCard
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("%,d".format(cal.total), style = RidgeType.cardNumber)
+            Text(" kcal", style = RidgeType.body, color = muted, modifier = Modifier.padding(bottom = 6.dp).weight(1f))
+            Text("%,d base + %,d active".format(cal.base, cal.total - cal.base), style = RidgeType.caption, color = muted, modifier = Modifier.padding(bottom = 8.dp))
+        }
+        val parts = listOf(
+            Triple("Resting (base)", cal.base, muted.copy(alpha = 0.35f)),
+            Triple("Steps", cal.steps, c.steps),
+            Triple("Everyday movement", cal.movement, c.steps.copy(alpha = 0.45f)),
+            Triple("Workouts", cal.workouts, c.strain),
+        )
+        // A part can be slightly negative (sleep burns a little under the base), so it gets no width.
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            parts.filter { it.second > 0 }.forEach { (_, kcal, color) -> Box(Modifier.weight(kcal.toFloat()).height(10.dp).background(color)) }
+        }
+        val details = listOf(
+            "Your body's energy at rest",
+            data.steps.valueOrNull?.let { "%,d steps".format(it.roundToInt()) } ?: "Walking and running",
+            "Standing and moving between steps",
+            when (cal.workoutsN) { 0 -> "None recorded by the strap"; 1 -> "1 recorded by the strap"; else -> "${cal.workoutsN} recorded by the strap" },
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            parts.zip(details).forEachIndexed { i, (part, detail) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(part.third))
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text(part.first, style = RidgeType.label)
+                        Text(detail, style = RidgeType.caption, color = muted)
+                    }
+                    Text(if (i == 0) "%,d".format(part.second) else "%+,d".format(part.second), style = RidgeType.label)
+                }
+            }
+        }
+        cal.caveats.firstOrNull()?.let { Subtle(it, style = RidgeType.caption) }
+    }
+}

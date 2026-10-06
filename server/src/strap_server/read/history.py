@@ -10,6 +10,8 @@ from uuid import UUID
 
 from psycopg import Cursor
 
+from strap_server.sessions import VISIBLE_WORKOUT_SQL
+
 MAX_DAYS = 400
 
 
@@ -29,10 +31,10 @@ def daily(cur: Cursor, user_id: UUID, metrics: list[str], first: date, last: dat
 
 
 def workouts(cur: Cursor, user_id: UUID, first_ts, last_ts) -> list[dict]:
-    """Workouts starting in [first_ts, last_ts), newest first."""
+    """Strap workouts starting in [first_ts, last_ts), newest first; not the ones the owner deleted or edited."""
     cur.execute(
         "SELECT start_ts, sport, duration_s, calories, distance_m, avg_hr, max_hr, min_hr FROM workout "
-        "WHERE user_id = %s AND start_ts >= %s AND start_ts < %s ORDER BY start_ts DESC",
+        f"WHERE user_id = %s AND start_ts >= %s AND start_ts < %s AND {VISIBLE_WORKOUT_SQL} ORDER BY start_ts DESC",
         (user_id, first_ts, last_ts),
     )
     return [

@@ -69,6 +69,21 @@ Withheld reasons: `profile_or_weight_missing` (trimp, zones, strain), `no_measur
 `no_hr_in_window` (no HR minutes at all). Sports are a closed list: tennis, treadmill,
 stairs (stair-climber machine), run, walk, ride, gym, swim, yoga, other.
 
+**Editing** (migration 0003, DD3). Any session can change sport, start or end, or be
+deleted, including one the strap recorded (id `strap:<start ms>`). `workout` stays the
+strap's own record, written only by ingest, so an edit is never a write to it:
+
+- deleting a strap workout hides it by its start (`workout_hidden`);
+- editing one hides it the same way and creates a session with source `strap`: the strap's
+  window and mapped sport, with the edit applied. Later edits go to that session.
+
+The strap sends the same workout again on the next sync; it lands on the hidden row and
+changes nothing the owner sees. A hidden workout still counts as covered time for S4
+(deleting it says it wasn't a workout, so it isn't offered back). Energy (spec/02) still
+adds the device's calories for a hidden workout and skips its minutes in the MET walk
+[CHECK: right for an edit, which keeps the effort; arguably wrong for a delete of a
+workout the strap started by mistake].
+
 ## S4 · Suggested sessions ("looks like a workout")
 
 **Ours.** The owner shouldn't have to remember to press Start. For each local day, a run of
@@ -106,3 +121,34 @@ Mapping (`sessions.ZEPP_SPORTS`), confirmed by the owner against his own session
 52 gym, 54 stairs, 8 treadmill, 6 walk; anything else shows as "other" with its code kept.
 [CHECK: that the strap's own workout records (`0x05`, spec/01 §7.2) use the same type codes
 as Zepp's export; likely, since Zepp's records come from the strap, but not yet seen live.]
+
+## S6 · Calories by source (read time, `read/calories.py`)
+
+**Ours.** The Today screen shows the day's calories as a base plus what was added on top
+of it, split by source. No new science: it is spec/02's energy model (`derive/energy.py`)
+walked the same way, minute by minute, with each minute's energy filed by what the minute
+was. Nothing is stored; it is computed when the summary is read.
+
+```
+bmr_min    = basal_calories / 1440                         (the day's Mifflin-St Jeor BMR)
+base       = bmr_min × minutes walked                      (resting energy)
+steps      = Σ over minutes with steps      (MET − 1) × bmr_min   (ACSM walking/running)
+movement   = Σ over other non-workout minutes (MET − 1) × bmr_min
+             (awake NEAT 1.3 / 1.55, and asleep 0.95, which is slightly under base)
+workouts   = the strap's workout calories − bmr_min × workout minutes
+total      = base + steps + movement + workouts
+```
+
+`MET` is `energy._minute_met`, the model's own function, and the inputs are the stored
+`basal_calories` and the `stride_m` on `total_calories`, so for a finished day `total`
+equals the stored `total_calories`. Workout minutes are skipped by the walk and counted from
+the strap's own calories, exactly as spec/02 does; the base share of those minutes is taken
+off so it isn't counted twice.
+
+**A day still running is walked up to the current minute only.** The stored
+`total_calories` for today walks the whole day and so counts the hours still to come as
+seated time; a tracker can't show those as burned. The card says it covers "so far".
+
+Withheld, as the other calorie cards, when the profile or weight is missing
+(`profile_or_weight_missing`) or the day isn't derived yet. The weight caveats and the
+"workout without calories" caveat ride along from `total_calories`.

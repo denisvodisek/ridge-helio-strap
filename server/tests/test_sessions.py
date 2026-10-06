@@ -13,6 +13,8 @@ from pydantic import ValidationError
 
 from strap_server import api, config, sessions
 from strap_server.derive import derive_day, derive_night
+from strap_server.ingest import upsert
+from strap_server.ingest.models import WorkoutIn
 from tests.derive import _seed
 
 pytestmark = pytest.mark.db
@@ -27,6 +29,7 @@ def seeded(db, test_dsn):
         _seed.seed(cur)
         cur.execute("DELETE FROM session")
         cur.execute("DELETE FROM session_dismissal")
+        cur.execute("DELETE FROM workout_hidden")
         for start, end in _seed.nights():
             derive_night(cur, _seed.OWNER, TZ, start, end)
         for day in _seed.DAYS:
@@ -66,6 +69,33 @@ def test_list_merges_strap_workouts_and_edits_round_trip(seeded) -> None:
     assert {it["source"] for it in listed} == {"ridge", "strap"}
     strap = next(it for it in listed if it["source"] == "strap")
     assert strap["sport"] == sessions.ZEPP_SPORTS.get(strap["strap_sport_code"], "other")
+
+
+def test_strap_workouts_are_edited_or_deleted_and_a_resync_keeps_it(seeded) -> None:
+    """The strap's own row is never changed: an edit or a delete hides it, so syncing it again does nothing."""
+    first, last = _seed._local(_seed.DAYS[0], 0, 0), _seed._local(DAY, 23, 59)
+    with psycopg.connect(seeded) as conn:
+        cur = conn.cursor()
+
+        def listed() -> list[dict]:
+            return sessions.list_range(cur, _seed.OWNER, TZ, first, last)
+
+        (strap,) = [it for it in listed() if it["source"] == "strap"]
+        made = sessions.update(conn, _seed.OWNER, TZ, strap["id"], sessions.SessionPatch(sport="run"))
+        assert made["source"] == "strap" and made["sport"] == "run" and not made["id"].startswith("strap:")
+        assert (made["start"], made["end"]) == (strap["start"], strap["end"])  # same window, now the owner's
+        assert sessions.update(conn, _seed.OWNER, TZ, strap["id"], sessions.SessionPatch(sport="gym")) is None  # one edit, one session
+        upsert.upsert_workouts(cur, _seed.OWNER, [WorkoutIn(start_ts=strap["start"], sport=0, duration_s=1800)])  # the strap sends it again
+        assert [(it["id"], it["sport"]) for it in listed()] == [(made["id"], "run")]
+        assert sessions.delete(conn, _seed.OWNER, made["id"])
+        assert listed() == []  # deleting the edit doesn't bring the strap's original back
+
+        cur.execute("DELETE FROM workout_hidden")
+        assert sessions.delete(conn, _seed.OWNER, strap["id"]) and not sessions.delete(conn, _seed.OWNER, strap["id"])
+        upsert.upsert_workouts(cur, _seed.OWNER, [WorkoutIn(start_ts=strap["start"], sport=0, duration_s=1800)])
+        assert listed() == []
+        assert cur.execute("SELECT count(*) FROM workout").fetchone()[0] == 1  # the strap's record itself is kept
+        assert not sessions.delete(conn, _seed.OWNER, "strap:12345") and sessions.update(conn, _seed.OWNER, TZ, "strap:x", sessions.SessionPatch()) is None
 
 
 def test_sustained_moderate_hr_is_offered_until_confirmed_or_dismissed(seeded) -> None:
@@ -120,6 +150,8 @@ def test_sessions_over_http(db, test_dsn, monkeypatch) -> None:
         day = end.date().isoformat()
         assert len(client.get(f"/v1/sessions?from={day}&to={day}", headers=auth).json()) == 1
         assert client.get(f"/v1/sessions/suggestions?day={day}", headers=auth).json() == []
+        backwards = client.put(f"/v1/sessions/{r.json()['id']}", json={"end": (end - timedelta(hours=2)).isoformat()}, headers=auth)
+        assert backwards.status_code == 422 and "forwards" in backwards.json()["detail"]
         assert client.delete(f"/v1/sessions/{r.json()['id']}", headers=auth).status_code == 200
         with psycopg.connect(test_dsn) as conn:
             conn.execute("DELETE FROM app_user WHERE id = %s", (owner,))

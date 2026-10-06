@@ -22,6 +22,7 @@ from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
 from strap_server.derive.recovery import _BASELINE_DAYS as RECOVERY_BASELINE_DAYS
 from strap_server.derive.recovery import _BASELINE_MIN_POINTS as RECOVERY_BASELINE_MIN
 from strap_server.derive.robust import MAD_TO_SD, median, median_abs_deviation
+from strap_server.read.calories import calorie_card
 
 BASELINE_DAYS = 30
 BASELINE_MIN_POINTS = 5
@@ -365,6 +366,7 @@ def day_summary(cur: Cursor, user_id: UUID, tz: str, day: date) -> dict:
             "total_calories": _metric_card(cur, user_id, day, "total_calories", missing=body),
             "mvpa_min": _metric_card(cur, user_id, day, "mvpa_min"),
         },
+        "calories": calorie_card(cur, user_id, tz, day, now) or withheld(body),
         "heart": {
             "resting": _metric_card(cur, user_id, day, "rhr_daily"),
             "hrv": _metric_card(cur, user_id, day, "hrv_sleep_avg", digits=1),

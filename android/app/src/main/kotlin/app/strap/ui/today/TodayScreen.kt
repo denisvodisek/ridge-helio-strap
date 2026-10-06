@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Bolt
@@ -64,6 +63,8 @@ import app.strap.ui.components.stagger
 import app.strap.ui.theme.LocalMetricColors
 import app.strap.ui.theme.LocalRidgeColors
 import app.strap.ui.theme.RidgeType
+import app.strap.ui.workout.Sport
+import app.strap.ui.workout.sessionLine
 import java.time.LocalDate
 import kotlin.math.roundToInt
 import org.json.JSONObject
@@ -73,6 +74,7 @@ class TodayNav(
     val recovery: () -> Unit,
     val sleep: () -> Unit,
     val activity: () -> Unit,
+    val session: (JSONObject) -> Unit,
     val journal: () -> Unit,
     val heart: () -> Unit,
     val stress: () -> Unit,
@@ -80,7 +82,7 @@ class TodayNav(
     val selectDay: (LocalDate) -> Unit,
 )
 
-/** Today: week strip, three gauges, the recovery card, the day's moments, stress, heart and steps. */
+/** Today: week strip, three gauges, the recovery card, calories, the day's moments, stress, heart and steps. */
 @Composable
 fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier, extra: @Composable () -> Unit = {}) {
     val c = LocalMetricColors.current
@@ -134,6 +136,7 @@ fun TodayContent(data: TodayData, nav: TodayNav, modifier: Modifier = Modifier, 
         // Workout suggestions ("looks like a workout") sit right under recovery: the day's
         // effort, waiting for one tap.
         item { extra() }
+        item { Box(Modifier.stagger(entrance, 3)) { CaloriesCard(data) } }
         item { SectionLabel("Your day", "sleep, workouts, journal") }
         item {
             val moments = moments(data, nav)
@@ -272,7 +275,8 @@ private fun moments(data: TodayData, nav: TodayNav): List<Moment> {
         }
         data.workouts.forEach { w ->
             val start = w.getLong("start")
-            add(Moment(start, clockOf(start), Icons.AutoMirrored.Rounded.DirectionsRun, c.heartTone, "Workout", workoutLine(w), null, nav.activity))
+            val sport = Sport.of(w.getString("sport"))
+            add(Moment(start, clockOf(start), sport.icon, c.heartTone, sport.label, sessionLine(w), null) { nav.session(w) })
         }
         if (data.day == LocalDate.now()) data.strain.valueOrNull?.let { s ->
             val now = System.currentTimeMillis()
@@ -281,9 +285,3 @@ private fun moments(data: TodayData, nav: TodayNav): List<Moment> {
     }.sortedBy { it.at }
 }
 
-/** "48 min · avg 138 bpm · 520 kcal" */
-internal fun workoutLine(w: JSONObject): String = listOfNotNull(
-    "${w.getInt("duration_s") / 60} min",
-    if (w.isNull("avg_hr")) null else "avg ${w.getInt("avg_hr")} bpm",
-    if (w.isNull("calories")) null else "${w.getInt("calories")} kcal",
-).joinToString(" · ")

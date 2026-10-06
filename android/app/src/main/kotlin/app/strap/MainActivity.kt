@@ -180,8 +180,10 @@ private sealed interface Pushed {
 
     data object Ask : Pushed
 
-    /** One workout session (the server's JSON, refreshed by the screen after an edit). */
-    data class Session(val json: JSONObject) : Pushed
+    /** One workout session: the server's JSON, replaced by the screen after an edit so the title follows. */
+    class Session(initial: JSONObject) : Pushed {
+        var json by mutableStateOf(initial)
+    }
 
     /** Setup in edit mode, full screen: no top bar or navigation bar. */
     data object ChangeStrap : Pushed
@@ -286,10 +288,10 @@ private fun AppShell(app: StrapApp) {
         }
     }
 
-    // Today's data is shared by Today and Recovery; it reloads when a sync finishes.
+    // Today's data is shared by Today and Recovery; it reloads when a sync finishes or a session changes.
     var today by remember { mutableStateOf<TodayData?>(null) }
     var todayError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(api, day, sync is SyncState.Finished) {
+    LaunchedEffect(api, day, sync is SyncState.Finished, sessionsVersion) {
         if (api == null) return@LaunchedEffect
         try {
             today = loadToday(api, day)
@@ -312,6 +314,7 @@ private fun AppShell(app: StrapApp) {
         recovery = { push(Pushed.Recovery) },
         sleep = { tab = Tab.SLEEP; stack.clear() },
         activity = { tab = Tab.ACTIVITY; stack.clear() },
+        session = { push(Pushed.Session(it)) },
         journal = { tab = Tab.JOURNAL; stack.clear() },
         heart = { push(Pushed.Detail(DetailMetric("hr", "Heart rate", "bpm", colors.heartTone, 3 * 60_000L))) },
         stress = { push(Pushed.Detail(DetailMetric("stress", "Stress", "", colors.stressTone, 11 * 60_000L))) },
@@ -458,7 +461,9 @@ private fun AppShell(app: StrapApp) {
                     api == null -> Centered("Add your server in Settings (the gear) first.")
                     top == Pushed.Profile -> ProfileScreen(api)
                     top == Pushed.Ask -> AskScreen(api)
-                    top is Pushed.Session -> SessionScreen(api, top.json) { stack.removeAt(stack.lastIndex); sessionsVersion++ }
+                    top is Pushed.Session -> SessionScreen(api, top.json, onChanged = { top.json = it; sessionsVersion++ }) {
+                        stack.removeAt(stack.lastIndex); sessionsVersion++
+                    }
                     top is Pushed.Detail -> MetricDetailScreen(api, top.metric, day)
                     top == Pushed.Recovery -> today?.takeIf { it.day == day }?.let { RecoveryContent(it) { d -> day = d } } ?: Loading(todayError)
                     else -> Column {
