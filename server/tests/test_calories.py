@@ -36,7 +36,7 @@ def test_a_finished_day_splits_its_stored_total(seeded) -> None:
         for day in _seed.DAYS:
             card = calorie_card(cur, _seed.OWNER, TZ, day, _seed._local(day, 0, 0) + timedelta(days=2))
             parts = card["parts"]
-            assert not card["so_far"] and card["until"] is None
+            assert not card["so_far"] and card["until"] is None and card["day_estimate"] is None
             assert card["total"] == pytest.approx(_stored(cur, day, "total_calories"), abs=1)
             assert card["base"] == round(_stored(cur, day, "basal_calories"))
             assert card["base"] + sum(parts.values()) == pytest.approx(card["total"], abs=2)  # each part rounded on its own
@@ -65,3 +65,4 @@ def test_a_running_day_counts_only_up_to_now(seeded) -> None:
     assert card["so_far"] and card["until"] == int(noon.timestamp() * 1000)
     assert card["base"] == round(bmr / 2)  # 720 of 1440 minutes
     assert card["total"] < whole  # the stored total counts the afternoon still to come
+    assert card["day_estimate"] == round(whole)

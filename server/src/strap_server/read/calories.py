@@ -78,6 +78,9 @@ def calorie_card(cur: Cursor, user_id: UUID, tz: str, day, now: datetime) -> dic
         "workouts_n": len(started),
         "so_far": running,
         "until": int(stop.timestamp() * 1000) if running else None,
+        # A running day's estimate for the whole day: the stored total, which walks the hours still
+        # to come as quiet time (seated or asleep), so it is what the day reaches without more activity.
+        "day_estimate": round(rows["total_calories"][0]) if running else None,
         "weight_kg": flags.get("weight_kg"),
         "caveats": flags.get("caveats", []),
     }

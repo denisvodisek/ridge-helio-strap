@@ -68,6 +68,8 @@ data class Calories(
     val workouts: Int,
     val workoutsN: Int,
     val until: Long?,
+    /** While the day runs: where it ends up if the rest of it is quiet. */
+    val dayEstimate: Int?,
     val caveats: List<String>,
 )
 
@@ -138,6 +140,7 @@ private fun calories(o: JSONObject?): Calories? = o?.takeIf { !it.has("withheld"
     val parts = c.getJSONObject("parts")
     Calories(c.getInt("total"), c.getInt("base"), parts.getInt("steps"), parts.getInt("movement"), parts.getInt("workouts"),
         c.getInt("workouts_n"), if (c.isNull("until")) null else c.getLong("until"),
+        if (c.isNull("day_estimate")) null else c.optInt("day_estimate"),
         c.optJSONArray("caveats")?.objects()?.map { it.getString("message") }.orEmpty())
 }
 

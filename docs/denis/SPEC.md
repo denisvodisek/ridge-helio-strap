@@ -147,7 +147,9 @@ off so it isn't counted twice.
 
 **A day still running is walked up to the current minute only.** The stored
 `total_calories` for today walks the whole day and so counts the hours still to come as
-seated time; a tracker can't show those as burned. The card says it covers "so far".
+seated time; a tracker can't show those as burned. The card says it covers "so far", and
+gives that stored total beside it as the day's estimate (`day_estimate`): where the day
+ends up if the rest of it is quiet, seated or asleep.
 
 Withheld, as the other calorie cards, when the profile or weight is missing
 (`profile_or_weight_missing`) or the day isn't derived yet. The weight caveats and the
