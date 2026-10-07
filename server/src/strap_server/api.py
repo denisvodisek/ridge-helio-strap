@@ -228,10 +228,14 @@ def patch_session(
 
 
 @app.delete("/v1/sessions/{session_id}")
-def delete_session(session_id: str, user_id: Annotated[UUID, Depends(owner)]) -> dict:
+def delete_session(
+    session_id: str,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
     """Deletes a session; a strap workout (`strap:<ms>`) is hidden instead, so a re-sync can't bring it back."""
     with connection() as conn:
-        if not sessions.delete(conn, user_id, session_id):
+        if not sessions.delete(conn, user_id, _owner_tz(conn, user_id, settings), session_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
     return {"deleted": session_id}
 

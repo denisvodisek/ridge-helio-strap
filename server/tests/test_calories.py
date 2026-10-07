@@ -7,7 +7,10 @@ from datetime import timedelta
 import psycopg
 import pytest
 
+from strap_server import sessions
 from strap_server.derive import derive_day, derive_night
+from strap_server.derive._common import _age
+from strap_server.derive.energy import keytel_kcal_min
 from strap_server.read.calories import calorie_card
 from tests.derive import _seed
 
@@ -66,3 +69,32 @@ def test_a_running_day_counts_only_up_to_now(seeded) -> None:
     assert card["base"] == round(bmr / 2)  # 720 of 1440 minutes
     assert card["total"] < whole  # the stored total counts the afternoon still to come
     assert card["day_estimate"] == round(whole)
+
+
+def test_keytel_known_values() -> None:
+    """Keytel 2005 without VO2max, worked by hand: kJ/min over 4.184."""
+    assert keytel_kcal_min(150, 84, 31, "male") == pytest.approx((-55.0969 + 0.6309 * 150 + 0.1988 * 84 + 0.2017 * 31) / 4.184)
+    assert keytel_kcal_min(150, 84, 31, "male") == pytest.approx(14.9355, abs=1e-3)
+    assert keytel_kcal_min(140, 60, 40, "female") == pytest.approx((-20.4022 + 0.4472 * 140 - 0.1263 * 60 + 0.074 * 40) / 4.184)
+
+
+def test_a_ridge_workout_counts_its_heart_rate_and_leaving_it_undoes_that(seeded) -> None:
+    """The seed's hour at 125 bpm, logged as a Ridge session: each minute counts at the Keytel
+    rate (it beats the step model there), the day is re-derived, and deleting it restores the day."""
+    day = _seed.DAYS[-1]
+    hour = (_seed._local(day, 8, 0), _seed._local(day, 9, 0))
+    after_day = _seed._local(day, 0, 0) + timedelta(days=2)
+    with psycopg.connect(seeded) as conn, conn.cursor() as cur:
+        before = _stored(cur, day, "total_calories")
+        made = sessions.create(conn, _seed.OWNER, TZ, sessions.SessionIn(sport="gym", start=hour[0], end=hour[1]))
+        with_session = _stored(cur, day, "total_calories")
+        card = calorie_card(cur, _seed.OWNER, TZ, day, after_day)
+        bmr = _stored(cur, day, "basal_calories")
+        sessions.delete(conn, _seed.OWNER, TZ, made["id"])
+        restored = _stored(cur, day, "total_calories")
+    per_min = keytel_kcal_min(125, _seed.WEIGHT_KG, _age(_seed.PROFILE["dob"], day), "male")
+    assert card["workouts_n"] == 1
+    assert card["parts"]["workouts"] == round(60 * (per_min - bmr / 1440))
+    assert card["total"] == pytest.approx(with_session, abs=1)  # the card and the stored total agree
+    assert with_session > before + 300
+    assert restored == pytest.approx(before)

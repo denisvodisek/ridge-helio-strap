@@ -1,5 +1,5 @@
 """Calories by source for one day: the resting base, then steps, everyday movement and
-workouts on top of it (ours, docs/denis/SPEC.md S6).
+workouts on top of it (ours, docs/denis/SPEC.md S6, S7).
 
 No new science: the same minute walk as `derive/energy.py`, with `energy._minute_met` and
 the stored BMR and stride, each minute's energy filed by what the minute was. So for a
@@ -15,8 +15,8 @@ from uuid import UUID
 
 from psycopg import Cursor
 
-from strap_server.derive._common import _day_bounds_utc, _day_minutes
-from strap_server.derive.energy import _minute_met
+from strap_server.derive._common import _day_bounds_utc, _day_minutes, _load_profile
+from strap_server.derive.energy import _minute_met, session_hr_kcal
 
 
 def calorie_card(cur: Cursor, user_id: UUID, tz: str, day, now: datetime) -> dict | None:
@@ -28,7 +28,8 @@ def calorie_card(cur: Cursor, user_id: UUID, tz: str, day, now: datetime) -> dic
     )
     rows = {m: (v, f) for m, v, f in cur.fetchall()}
     start, end = _day_bounds_utc(day, tz)
-    if len(rows) < 2 or now < start:
+    prof = _load_profile(cur, user_id, tz, day)
+    if len(rows) < 2 or now < start or prof is None:
         return None
     flags = rows["total_calories"][1]
     bmr = rows["basal_calories"][0]
@@ -48,26 +49,32 @@ def calorie_card(cur: Cursor, user_id: UUID, tz: str, day, now: datetime) -> dic
     )
     steps_by_min = {r[0]: float(r[1]) for r in cur.fetchall()}
 
+    hr_kcal, sessions_n = session_hr_kcal(cur, user_id, start, end, prof, day)  # Ridge workouts (SPEC S7)
+
     def asleep(m: datetime) -> bool:
         return any(s <= m < e for s, e in sleep_wins)
 
     stride = flags["stride_m"]
     base_m = start.replace(second=0, microsecond=0)
     minutes = _day_minutes(start, stop)
-    steps = movement = 0.0
+    steps = movement = ridge = 0.0
     workout_min = 0
     for i in range(minutes):
         m = base_m + timedelta(minutes=i)
         if any(s <= m < e for s, e, _ in workouts):
             workout_min += 1
             continue
-        extra = (_minute_met(m, steps_by_min, stride, asleep) - 1) * bmr_min
+        met_kcal = _minute_met(m, steps_by_min, stride, asleep) * bmr_min
+        if m in hr_kcal:
+            ridge += max(hr_kcal[m], met_kcal) - bmr_min
+            continue
+        extra = met_kcal - bmr_min
         if steps_by_min.get(m, 0.0) > 0:
             steps += extra
         else:
             movement += extra
     started = [w for w in workouts if w[0] < stop]
-    workout_kcal = sum(float(c or 0) for _, _, c in started) - workout_min * bmr_min
+    workout_kcal = sum(float(c or 0) for _, _, c in started) - workout_min * bmr_min + ridge
     base = minutes * bmr_min
     total = base + steps + movement + workout_kcal
     return {
@@ -75,7 +82,7 @@ def calorie_card(cur: Cursor, user_id: UUID, tz: str, day, now: datetime) -> dic
         "base": round(base),
         "active": round(total - base),
         "parts": {"steps": round(steps), "movement": round(movement), "workouts": round(workout_kcal)},
-        "workouts_n": len(started),
+        "workouts_n": len(started) + sessions_n,
         "so_far": running,
         "until": int(stop.timestamp() * 1000) if running else None,
         # A running day's estimate for the whole day: the stored total, which walks the hours still

@@ -66,6 +66,7 @@ from strap_server.derive.freshness import (
     weight_age_days,
     weight_is_stale,
 )
+from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
 
 # Awake non-step NEAT — context-aware by step proximity instead of a flat value.
 # A flat 1.4 overcounts long sedentary stretches (Compendium: sitting-quiet 1.3)
@@ -104,7 +105,8 @@ _INDIVIDUAL_ERROR_PCT = 15.0
 
 
 def _tee_met(
-    cur: Cur, user_id: UUID, start_utc: datetime, end_utc: datetime, bmr: float, stride_m: float
+    cur: Cur, user_id: UUID, start_utc: datetime, end_utc: datetime, bmr: float, stride_m: float,
+    hr_kcal: dict[datetime, float] | None = None,
 ) -> float:
     """Total EE for one day via state->MET, anchored to BMR (1 MET == BMR/min).
 
@@ -150,7 +152,9 @@ def _tee_met(
         m = base + timedelta(minutes=i)
         if _in_wk(m):
             continue
-        total += _minute_met(m, steps_by_min, stride_m, _asleep) * bmr_min
+        met_kcal = _minute_met(m, steps_by_min, stride_m, _asleep) * bmr_min
+        # A Ridge-workout minute with heart rate (docs/denis/SPEC.md S7, ours): never less than the step model.
+        total += max(hr_kcal[m], met_kcal) if hr_kcal and m in hr_kcal else met_kcal
     return total
 
 
@@ -169,6 +173,46 @@ def _minute_met(m: datetime, steps_by_min: dict, stride_m: float, is_asleep) -> 
         (m + timedelta(minutes=k)) in steps_by_min for k in range(-NEAT_WINDOW, NEAT_WINDOW + 1)
     )
     return AWAKE_ACTIVE_MET if near else AWAKE_SEDENTARY_MET
+
+
+# Ridge workouts (ours, docs/denis/SPEC.md S7, DD4). A session started or logged in Ridge has
+# no strap calorie figure, so its minutes are counted from heart rate. Keytel et al. 2005,
+# J Sports Sci 23(3):289-297, the equation without VO2max. SOURCED.
+_KEYTEL = {"male": (-55.0969, 0.6309, 0.1988, 0.2017), "female": (-20.4022, 0.4472, -0.1263, 0.0740)}
+_KJ_PER_KCAL = 4.184
+KEYTEL_MIN_HR = 90.0
+# PRACTITIONER CHOICE, no paper: Keytel was fitted on exercising heart rates and overstates
+# energy near rest, so a minute under this (a pause between sets) stays on the step model.
+
+
+def keytel_kcal_min(hr: float, weight_kg: float, age: int, sex: str) -> float:
+    """Energy for one minute at heart rate `hr`, in kcal (Keytel 2005, without VO2max)."""
+    a, b, c, d = _KEYTEL["male" if sex == "male" else "female"]
+    return (a + b * hr + c * weight_kg + d * age) / _KJ_PER_KCAL
+
+
+def session_hr_kcal(cur: Cur, user_id: UUID, start_utc: datetime, end_utc: datetime, prof: dict, day: date) -> tuple[dict[datetime, float], int]:
+    """Keytel kcal for each minute of the day inside a Ridge session with valid HR at or above
+    KEYTEL_MIN_HR (SPEC S7), and how many sessions have such a minute. Minutes inside a strap
+    workout are left out: the strap's own calories count there (an edited strap workout is both)."""
+    cur.execute("SELECT start_ts, duration_s FROM workout WHERE user_id = %s AND start_ts >= %s AND start_ts < %s", (user_id, start_utc, end_utc))
+    strap = [(w, w + timedelta(seconds=int(d or 0))) for w, d in cur.fetchall()]
+    cur.execute("SELECT start_ts, end_ts FROM session WHERE user_id = %s AND end_ts > %s AND start_ts < %s", (user_id, start_utc, end_utc))
+    sessions = cur.fetchall()
+    age = _age(prof["dob"], day)
+    out: dict[datetime, float] = {}
+    counted = 0
+    for s, e in sessions:
+        cur.execute(
+            "SELECT date_trunc('minute', ts) m, avg(value) FROM sample "
+            f"WHERE user_id = %s AND metric = 'hr' AND {HR_VALID_SQL} AND ts >= %s AND ts < %s GROUP BY m",
+            (user_id, *HR_VALID_BOUNDS, max(s, start_utc), min(e, end_utc)),
+        )
+        minutes = {m: keytel_kcal_min(float(hr), prof["weight_kg"], age, prof["sex"]) for m, hr in cur.fetchall()
+                   if hr >= KEYTEL_MIN_HR and not any(ws <= m < we for ws, we in strap)}
+        counted += bool(minutes)
+        out.update(minutes)
+    return out, counted
 
 
 _WEIGHT_STALE_MESSAGE = (
@@ -319,7 +363,7 @@ def derive_calories(
         - 5 * age
         + (5 if prof["sex"] == "male" else -161)
     )
-    total = _tee_met(cur, user_id, start_utc, end_utc, bmr, stride_m)
+    total = _tee_met(cur, user_id, start_utc, end_utc, bmr, stride_m, session_hr_kcal(cur, user_id, start_utc, end_utc, prof, day)[0])
     # The uncounted sessions come back beside the sum, because a NULL in this column is
     # not a zero: the caller's MET walk has already skipped these minutes.
     cur.execute(

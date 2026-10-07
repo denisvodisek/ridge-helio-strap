@@ -64,7 +64,7 @@ def test_list_merges_strap_workouts_and_edits_round_trip(seeded) -> None:
         made = sessions.create(conn, _seed.OWNER, TZ, sessions.SessionIn(sport="gym", start=HOUR[0], end=HOUR[1]))
         moved = sessions.update(conn, _seed.OWNER, TZ, made["id"], sessions.SessionPatch(sport="treadmill", end=HOUR[1] - timedelta(minutes=30)))
         listed = sessions.list_range(conn.cursor(), _seed.OWNER, TZ, first, last)
-        assert sessions.delete(conn, _seed.OWNER, made["id"]) and not sessions.delete(conn, _seed.OWNER, made["id"])
+        assert sessions.delete(conn, _seed.OWNER, TZ, made["id"]) and not sessions.delete(conn, _seed.OWNER, TZ, made["id"])
     assert moved["sport"] == "treadmill" and moved["stats"]["hr"]["minutes"] == 30
     assert {it["source"] for it in listed} == {"ridge", "strap"}
     strap = next(it for it in listed if it["source"] == "strap")
@@ -87,15 +87,15 @@ def test_strap_workouts_are_edited_or_deleted_and_a_resync_keeps_it(seeded) -> N
         assert sessions.update(conn, _seed.OWNER, TZ, strap["id"], sessions.SessionPatch(sport="gym")) is None  # one edit, one session
         upsert.upsert_workouts(cur, _seed.OWNER, [WorkoutIn(start_ts=strap["start"], sport=0, duration_s=1800)])  # the strap sends it again
         assert [(it["id"], it["sport"]) for it in listed()] == [(made["id"], "run")]
-        assert sessions.delete(conn, _seed.OWNER, made["id"])
+        assert sessions.delete(conn, _seed.OWNER, TZ, made["id"])
         assert listed() == []  # deleting the edit doesn't bring the strap's original back
 
         cur.execute("DELETE FROM workout_hidden")
-        assert sessions.delete(conn, _seed.OWNER, strap["id"]) and not sessions.delete(conn, _seed.OWNER, strap["id"])
+        assert sessions.delete(conn, _seed.OWNER, TZ, strap["id"]) and not sessions.delete(conn, _seed.OWNER, TZ, strap["id"])
         upsert.upsert_workouts(cur, _seed.OWNER, [WorkoutIn(start_ts=strap["start"], sport=0, duration_s=1800)])
         assert listed() == []
         assert cur.execute("SELECT count(*) FROM workout").fetchone()[0] == 1  # the strap's record itself is kept
-        assert not sessions.delete(conn, _seed.OWNER, "strap:12345") and sessions.update(conn, _seed.OWNER, TZ, "strap:x", sessions.SessionPatch()) is None
+        assert not sessions.delete(conn, _seed.OWNER, TZ, "strap:12345") and sessions.update(conn, _seed.OWNER, TZ, "strap:x", sessions.SessionPatch()) is None
 
 
 def test_sustained_moderate_hr_is_offered_until_confirmed_or_dismissed(seeded) -> None:

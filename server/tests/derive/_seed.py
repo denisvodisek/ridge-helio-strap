@@ -133,6 +133,8 @@ def seed(cur) -> None:
     cur.execute("DELETE FROM sample")
     cur.execute("DELETE FROM sleep_session")
     cur.execute("DELETE FROM workout")
+    cur.execute("DELETE FROM workout_hidden")
+    cur.execute("DELETE FROM session")  # Ridge workouts change the day's calories (docs/denis/SPEC.md S7)
     cur.execute("DELETE FROM weight_log")
     cur.execute("DELETE FROM profile")
     cur.execute(

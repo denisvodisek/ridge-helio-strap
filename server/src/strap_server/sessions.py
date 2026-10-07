@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from psycopg import Connection, Cursor
 from pydantic import BaseModel, Field, model_validator
 
-from strap_server.derive import freshness
+from strap_server.derive import derive_day, freshness
 from strap_server.derive._common import _age, _day_bounds_utc, _load_profile
 from strap_server.derive.cardio_load import _measured_rhr, _trimp_and_zones
 from strap_server.derive.hr_validity import HR_VALID_BOUNDS, HR_VALID_SQL
@@ -166,6 +166,21 @@ def list_range(cur: Cursor, user_id: UUID, tz: str, first: datetime, last: datet
     return sorted(items, key=lambda it: it["start"], reverse=True)
 
 
+def _rederive(conn: Connection, user_id: UUID, tz: str, *windows: tuple[datetime, datetime]) -> None:
+    """Re-derive every local day a session window touches: its minutes count toward the day's
+    calories (SPEC S7), so a saved, moved or deleted session moves the day's total."""
+    zone = ZoneInfo(tz)
+    days = set()
+    for start, end in windows:
+        d, last = start.astimezone(zone).date(), (end - timedelta(microseconds=1)).astimezone(zone).date()
+        while d <= last:
+            days.add(d)
+            d += timedelta(days=1)
+    with conn.cursor() as cur:
+        for d in sorted(days):
+            derive_day(cur, user_id, tz, d)
+
+
 def create(conn: Connection, user_id: UUID, tz: str, s: SessionIn, source: str | None = None) -> dict:
     r = conn.execute(
         "INSERT INTO session (user_id, sport, start_ts, end_ts, source, notes) VALUES (%s, %s, %s, %s, %s, %s) "
@@ -173,6 +188,7 @@ def create(conn: Connection, user_id: UUID, tz: str, s: SessionIn, source: str |
         (user_id, s.sport, s.start, s.end, source or s.source, s.notes),
     ).fetchone()
     out = _row(r)
+    _rederive(conn, user_id, tz, (s.start, s.end))
     with conn.cursor() as cur:
         out["stats"] = stats(cur, user_id, tz, s.start, s.end)
     return out
@@ -218,15 +234,19 @@ def update(conn: Connection, user_id: UUID, tz: str, session_id: str, patch: Ses
         (merged.sport, merged.start, merged.end, merged.notes, user_id, session_id),
     ).fetchone()
     out = _row(row)
+    _rederive(conn, user_id, tz, (r[1], r[2]), (merged.start, merged.end))
     with conn.cursor() as cur:
         out["stats"] = stats(cur, user_id, tz, merged.start, merged.end)
     return out
 
 
-def delete(conn: Connection, user_id: UUID, session_id: str) -> bool:
+def delete(conn: Connection, user_id: UUID, tz: str, session_id: str) -> bool:
     if (strap := _strap_start(session_id)) is not None:
-        return _hide(conn, user_id, strap) is not None
-    return conn.execute("DELETE FROM session WHERE user_id = %s AND id::text = %s", (user_id, session_id)).rowcount > 0
+        return _hide(conn, user_id, strap) is not None  # energy still counts a hidden strap workout (SPEC S3)
+    gone = conn.execute("DELETE FROM session WHERE user_id = %s AND id::text = %s RETURNING start_ts, end_ts", (user_id, session_id)).fetchone()
+    if gone:
+        _rederive(conn, user_id, tz, gone)
+    return gone is not None
 
 
 def dismiss(conn: Connection, user_id: UUID, start: datetime) -> None:

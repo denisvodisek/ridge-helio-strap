@@ -136,6 +136,7 @@ steps      = Σ over minutes with steps      (MET − 1) × bmr_min   (ACSM walk
 movement   = Σ over other non-workout minutes (MET − 1) × bmr_min
              (awake NEAT 1.3 / 1.55, and asleep 0.95, which is slightly under base)
 workouts   = the strap's workout calories − bmr_min × workout minutes
+             + Σ over Ridge-workout minutes (S7) (kcal_minute − bmr_min)
 total      = base + steps + movement + workouts
 ```
 
@@ -154,3 +155,32 @@ ends up if the rest of it is quiet, seated or asleep.
 Withheld, as the other calorie cards, when the profile or weight is missing
 (`profile_or_weight_missing`) or the day isn't derived yet. The weight caveats and the
 "workout without calories" caveat ride along from `total_calories`.
+
+## S7 · Calories during Ridge workouts (`derive/energy.py`, DD4)
+
+**Ours, changing spec/02's energy model for one kind of minute.** spec/02 counts a workout's
+energy from the strap's own calorie figure and everything else from steps and sleep. A
+workout started, logged or confirmed in Ridge (S3) has no strap figure, so its minutes fell
+to the step model: an hour of gym counted as an hour of sitting. Heart rate is the one
+signal the strap gives for those minutes, so they are counted from it:
+
+```
+keytel(hr) = male:   (−55.0969 + 0.6309·hr + 0.1988·kg + 0.2017·age) / 4.184   kcal/min
+             female: (−20.4022 + 0.4472·hr − 0.1263·kg + 0.0740·age) / 4.184
+kcal_minute = max(keytel(hr), MET × bmr_min)
+```
+
+Keytel et al. 2005, J Sports Sci 23(3):289–297, the equation without VO₂max: heart rate,
+weight, age and sex, all already in the profile. It was fitted on exercising heart rates
+(r ≈ 0.91), with an individual error around the ±15–20 % this model already states.
+
+Which minutes: inside a session (S3) of any source, with a valid per-minute heart rate
+(`HR_VALID_SQL`, as cardio_load), not inside a strap workout (the strap's own calories win,
+so nothing is counted twice), and with HR ≥ `KEYTEL_MIN_HR` = 90 bpm. **Practitioner
+choice, no paper**: the equation was fitted on exercise and overstates energy at resting
+heart rates, so a pause between sets below 90 bpm stays on the step model. The `max` keeps a
+minute from ever counting less than the step model would. Any other minute is unchanged.
+
+A session saved, moved or deleted re-derives the days it touches, so the day's
+`total_calories` follows. [CHECK: the 90 bpm gate on real sessions; a per-person gate from
+resting HR would be better once there are a few weeks of them]
