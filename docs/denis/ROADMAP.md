@@ -96,9 +96,13 @@ S = a session or two · M = a few sessions · L = a project in itself.
    costs you 22 min of deep sleep"). The spec and thresholds are already written. Output:
    `/v1/insights` plus an Insights screen. Label every finding n=1.
 5. **Richer journal** (S per kind). Quick-tap tags that feed #4: late meal, screens in
-   bed, sauna, cold exposure, supplements, mood, energy and soreness (1–5), travel,
-   meditation. `manual_entry` already has duration, severity and notes, so no migration
-   is needed.
+   bed, sauna, cold exposure, mood, energy and soreness (1–5), travel, meditation.
+   ✅ Water and supplements (2026-10-08, SPEC S8, DD5). Millilitres, with an average over
+   days that were actually logged, and a reminder when a workout spent calories or the
+   home-area high is at least 30°C. The reminder names those facts and does not set a
+   target. Supplements: the default names, any name you add, the dose, and an effect if
+   you noticed one. Entries needed no migration. The home area is two columns on `profile`
+   (migration 0004) and does not re-derive.
 6. ✅ **Talk to your data: MCP server** (S, done 2026-10-03; SETUP §8). A small read-only MCP server over the Ridge
    database (a read-only Postgres role, typed tools like `daily(metric, from, to)`,
    `day_summary(day)`, `workouts(range)`, `journal(range)`, plus guarded read-only SQL).

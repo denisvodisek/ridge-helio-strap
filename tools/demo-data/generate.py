@@ -122,6 +122,28 @@ def build(days: int, now: datetime) -> dict:
     return {"samples": samples, "sleep": sleep, "workouts": workouts, "daily_totals": totals}
 
 
+def log_drinks(url: str, token: str, days: int, now: datetime) -> None:
+    """Water through the day, and a supplement every other morning. Synthetic, fixed seed."""
+    rng = random.Random(4)
+    doses = {"Magnesium": (200, "mg"), "D3": (2000, "IU"), "Omega-3": (1000, "mg"), "Vitamin C": (500, "mg")}
+    names = list(doses)
+    notes = ["easier to sleep", "no change", "felt brighter"]
+    for d in range(days):
+        day = (now - timedelta(days=d)).replace(second=0, microsecond=0)
+        for _ in range(rng.randint(2, 3)):
+            ml = rng.choice([100, 200, 300, 400, 500, 750, 1000])
+            ts = min(day.replace(hour=rng.randint(8, 21), minute=rng.choice([0, 15, 30, 45])), now)
+            post(url, token, "/v1/journal", {"kind": "water", "amount": ml, "ts": ts.isoformat()})
+        if d % 2 == 0:
+            name = names[d % len(names)]
+            amount, unit = doses[name]
+            body = {"kind": "supplement", "name": name, "amount": amount, "unit": unit,
+                    "ts": min(day.replace(hour=8, minute=0), now).isoformat()}
+            if d % 6 == 0:
+                body["notes"] = notes[d % len(notes)]
+            post(url, token, "/v1/journal", body)
+
+
 def post(url: str, token: str, path: str, body: dict) -> dict:
     req = urllib.request.Request(url + path, json.dumps(body).encode(), method="POST", headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
@@ -141,6 +163,7 @@ def main() -> None:
     for week in range(0, a.days, 7):  # a weekly weigh-in keeps the weight fresh
         post(a.url, a.token, "/v1/journal", {"kind": "weight", "amount": round(74.6 - week * 0.03, 1),
                                              "ts": (now - timedelta(days=a.days - week)).isoformat()})
+    log_drinks(a.url, a.token, a.days, now)
     s = data["samples"]
     for i in range(0, len(s), PAGE):
         post(a.url, a.token, "/v1/ingest", {"samples": s[i:i + PAGE]})

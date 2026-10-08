@@ -13,7 +13,7 @@ server runs (over `ssh` for a remote box).
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -21,7 +21,7 @@ from uuid import UUID
 import psycopg
 from mcp.server.mcpserver import MCPServer
 
-from strap_server import journal, profile, sessions
+from strap_server import hydration, journal, profile, sessions
 from strap_server.config import get_settings
 from strap_server.derive._common import _day_bounds_utc
 from strap_server.read import history, series, summary
@@ -132,10 +132,24 @@ def workout_sessions(start: str, end: str) -> list[dict]:
 
 @mcp.tool()
 def journal_entries(start: str, end: str) -> list[dict]:
-    """Caffeine (mg), alcohol (standard drinks) and weight (kg) logged in [start, end], newest first."""
+    """Caffeine (mg), alcohol (standard drinks), water (ml), supplements (name, dose, optional
+    effect) and weight (kg) logged in [start, end], newest first."""
     with _connect() as conn:
         first, last = _local_bounds(_tz(conn), date.fromisoformat(start), date.fromisoformat(end))
         return _plain(journal.entries(conn, _owner(), first, last))
+
+
+@mcp.tool()
+def journal_hydration(day: str) -> dict:
+    """Water logged on one local day, the average over days with a log in the 28 days before it,
+    and the drink reminder. A workout contributes its calorie total; heat contributes only when a
+    home area is set and that day's high is at least 30°C. The reminder is not a target volume.
+    Withheld parts name a reason. Also lists the supplement names the journal offers."""
+    with _connect() as conn:
+        tz = _tz(conn)
+        return _plain(hydration.summary(
+            conn, _owner(), tz, date.fromisoformat(day), datetime.now(UTC), hydration.live_day_max,
+        ))
 
 
 @mcp.tool()

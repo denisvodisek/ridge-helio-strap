@@ -184,3 +184,51 @@ minute from ever counting less than the step model would. Any other minute is un
 A session saved, moved or deleted re-derives the days it touches, so the day's
 `total_calories` follows. [CHECK: the 90 bpm gate on real sessions; a per-person gate from
 resting HR would be better once there are a few weeks of them]
+
+## S8 · Water and supplements (read time, `hydration.py`)
+
+**Ours.** Two more journal kinds, both stored in `manual_entry` and never derived. Water
+is millilitres. A supplement is a name, a dose and an optional effect (`notes`). Neither
+re-derives anything.
+
+```
+today_ml   = Σ water entries on the local day            (0 when nothing was logged: that is
+                                                          the log, not an estimate of intake)
+average    = mean of daily totals over the 28 local days before today
+             counting only days with at least one entry
+             withheld as water_average_learning until 3 such days (have / need)
+```
+
+Days with no water entry are left out of the average, never counted as zero. Today is left
+out too, so the reminder can compare today with earlier days. The quick amounts are 100,
+200, 300, 400, 500, 750 and 1000 ml. One entry is at most 5000 ml.
+
+The supplement names offered before any have been typed are Magnesium (mg), D3 (IU), K
+(mcg), B12 (mcg), Biotin (mcg), Zinc (mg), Vitamin C (mg), Collagen (g) and Omega-3 (mg).
+The unit is the usual one for that substance, not a dose. A name the owner types is offered
+again, with the unit and amount they used last. An effect is free text, kept on that entry
+only. Units are mg, mcg, g and IU, each with a cap so a slip doesn't land as a dose
+(50 000 mg, 100 000 mcg, 100 g, 100 000 IU).
+
+**The reminder** is shown when the day has a visible workout (a session, or a strap workout
+that hasn't been hidden) or the day's high is at least `HOT_DAY_C` = 30°C. **The 30°C gate
+is ours**: a fixed line so "hot" means the same thing every day, not a heat-health warning,
+which depends on the place. The text names the facts and says it is not a target:
+
+- workout calories are S6's workout part (`parts.workouts`), shown when that part is at
+  least 1 kcal. No profile, no weight or no derived day withholds them (`no_calorie_total`)
+  and the reminder says the total isn't available. A workout whose part rounds to under
+  1 kcal is mentioned with no number.
+- the high is that local day's forecast maximum from Open-Meteo, at the home area. No home
+  area withholds heat (`no_home`). A failed fetch withholds it (`weather_unavailable`).
+  Neither case is treated as a cool day that was measured.
+
+Sweat loss rises with exercise and with heat, and it varies too widely for one volume to
+fit a person (Sawka et al. 2007, ACSM position stand on exercise and fluid replacement,
+Med Sci Sports Exerc 39(2):377–390). So the reminder never says how much to drink.
+
+The home area is `profile.home_lat` / `home_lon` (migration 0004, DD5). Saving it does not
+re-derive, and a profile edit does not clear it. The phone sends it only when asked, and
+the hydration response says whether it is set, not what the coordinates are. The kcal
+figure is S6's, so it still includes a strap workout the owner has hidden (S3's open check)
+on a day that also has a visible one.

@@ -125,14 +125,18 @@ TOOLS = [
     _fn("samples", "Raw strap samples in buckets (15m, 1h, 1d): min, max, mean, sum, count. Names: hr, stress, steps, hrv, spo2, skin_temp, respiratory_rate.",
         {"name": {"type": "string"}, "start": _DAY, "end": _DAY, "bucket": {"type": "string", "enum": ["15m", "1h", "1d"]}}, ["name", "start", "end"]),
     _fn("workout_sessions", "Workouts in a date range with HR, load, zones, strain and HR recovery.", {"start": _DAY, "end": _DAY}, ["start", "end"]),
-    _fn("journal_entries", "Caffeine, alcohol and weight logged in a date range.", {"start": _DAY, "end": _DAY}, ["start", "end"]),
+    _fn("journal_entries", "Caffeine, alcohol, water, supplements and weight logged in a date range.",
+        {"start": _DAY, "end": _DAY}, ["start", "end"]),
+    _fn("journal_hydration", "Water logged on one day, the average on days with a log, and the drink reminder (workout calories and heat). Not a target volume.",
+        {"day": _DAY}, ["day"]),
     _fn("owner_profile", "Height, sex, date of birth, activity level and latest weight.", {}, []),
     _fn("query", "One read-only SQL SELECT for anything the other tools can't answer (500 rows max).", {"sql": {"type": "string"}}, ["sql"]),
 ]
 _IMPL = {
     "day_summary": mcp_server.day_summary, "daily": mcp_server.daily,
     "samples": mcp_server.samples, "workout_sessions": mcp_server.workout_sessions,
-    "journal_entries": mcp_server.journal_entries, "owner_profile": mcp_server.owner_profile, "query": mcp_server.query,
+    "journal_entries": mcp_server.journal_entries, "journal_hydration": mcp_server.journal_hydration,
+    "owner_profile": mcp_server.owner_profile, "query": mcp_server.query,
 }
 
 
@@ -200,6 +204,7 @@ def answer(chat: ChatIn, tz: str, client: httpx.Client | None = None) -> dict:
 TOOL_STATUS = {
     "metrics": "Checking what's recorded", "day_summary": "Reading that day", "daily": "Reading your history",
     "samples": "Reading raw readings", "workout_sessions": "Looking at workouts", "journal_entries": "Reading your journal",
+    "journal_hydration": "Checking water and supplements",
     "owner_profile": "Reading your profile", "query": "Searching your data",
 }
 

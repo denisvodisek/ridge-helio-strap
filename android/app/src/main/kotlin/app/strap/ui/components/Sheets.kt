@@ -81,7 +81,12 @@ object Infos {
         "Press and drag on the chart to read any point. Bars show each period's lowest to highest reading; the dot is its average.",
         "Shaded: asleep.",
     ))
-    val journal = Info("Journal", listOf("Caffeine and alcohol times feed your personal cut-off analysis once there are enough nights. Weight updates calories and VO₂max from the day it was logged."))
+    val journal = Info("Journal", listOf(
+        "Water is what you logged, in millilitres. The average uses only days you logged, never a day you skipped.",
+        "A workout, or a high of 30°C or more where you set a home area, reminds you to drink. It does not say how much.",
+        "Supplements are the dose you took and any effect you noticed. The name is yours to change.",
+        "Caffeine and alcohol times feed your personal cut-off analysis once there are enough nights. Weight updates calories and VO₂max from the day it was logged.",
+    ))
     val alarms = Info("Alarms", listOf(
         "These alarms live on the strap and vibrate it. Changes are written to the strap straight away.",
         "The strap holds up to 10 alarms.",

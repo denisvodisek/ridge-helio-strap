@@ -74,7 +74,8 @@ private val STARTERS = listOf(
 /** Plain names for the server's tools, for the "looked at" line. */
 private val TOOL_NAMES = mapOf(
     "metrics" to "what's recorded", "day_summary" to "a day's summary", "daily" to "daily history", "samples" to "raw readings",
-    "workout_sessions" to "workouts", "journal_entries" to "journal", "owner_profile" to "profile", "query" to "a database query",
+    "workout_sessions" to "workouts", "journal_entries" to "journal", "journal_hydration" to "water",
+    "owner_profile" to "profile", "query" to "a database query",
 )
 
 /**

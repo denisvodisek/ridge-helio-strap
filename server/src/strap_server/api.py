@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from strap_server import chat, journal, profile, sessions
+from strap_server import chat, hydration, journal, profile, sessions
 from strap_server.config import Settings, get_settings
 from strap_server.db import connection
 from strap_server.ingest.models import IngestPayload, IngestSummary
@@ -148,6 +148,45 @@ def get_journal(
         return journal.entries(conn, user_id, *_local_bounds(_owner_tz(conn, user_id, settings), start, end))
 
 
+@app.get("/v1/journal/hydration")
+def get_hydration(
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    day: date,
+) -> dict:
+    """Today's water, the logged-day average, supplement chips, and the drink reminder (SPEC S8)."""
+    with connection() as conn:
+        tz = _owner_tz(conn, user_id, settings)
+        return hydration.summary(conn, user_id, tz, day, datetime.now(UTC), hydration.live_day_max)
+
+
+@app.put("/v1/journal/home")
+def put_journal_home(
+    body: hydration.HomeIn,
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    day: date,
+) -> dict:
+    """Saves a coarse home area for the heat reminder and returns the hydration card. Does not re-derive."""
+    with connection() as conn:
+        _ensure_owner(conn, user_id, settings)
+        hydration.set_home(conn, user_id, body)
+        tz = _owner_tz(conn, user_id, settings)
+        return hydration.summary(conn, user_id, tz, day, datetime.now(UTC), hydration.live_day_max)
+
+
+@app.delete("/v1/journal/home")
+def delete_journal_home(
+    user_id: Annotated[UUID, Depends(owner)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    day: date,
+) -> dict:
+    with connection() as conn:
+        hydration.clear_home(conn, user_id)
+        tz = _owner_tz(conn, user_id, settings)
+        return hydration.summary(conn, user_id, tz, day, datetime.now(UTC), hydration.live_day_max)
+
+
 @app.post("/v1/journal")
 def post_journal(
     entry: journal.JournalIn,
@@ -157,6 +196,19 @@ def post_journal(
     with connection() as conn:
         _ensure_owner(conn, user_id, settings)
         return journal.add(conn, None, user_id, entry)
+
+
+@app.put("/v1/journal/entry/{entry_id}")
+def put_journal_entry(
+    entry_id: str,
+    patch: journal.SupplementIn,
+    user_id: Annotated[UUID, Depends(owner)],
+) -> dict:
+    """Edits one supplement's name, dose or effect. Water and the other kinds are deleted, not edited."""
+    with connection() as conn:
+        if not journal.update_supplement(conn, user_id, entry_id, patch):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such supplement")
+    return {"id": entry_id}
 
 
 @app.delete("/v1/journal/{entry_id}")

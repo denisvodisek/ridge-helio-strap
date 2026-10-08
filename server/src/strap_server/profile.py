@@ -57,6 +57,8 @@ def get(conn: Connection, user_id: UUID) -> dict:
 def put(conn: Connection, conninfo: str | None, user_id: UUID, profile: ProfileIn) -> dict:
     """Stores the profile; when anything changed, re-derives every day (after commit)."""
     before = get(conn, user_id)
+    # home_lat / home_lon (migration 0004, SPEC S8) are not in this write: a profile edit must
+    # not clear the journal's home area, and setting that area must not re-derive.
     conn.execute(
         "INSERT INTO profile (user_id, height_cm, sex, dob, srpa) VALUES (%s, %s, %s, %s, %s) "
         "ON CONFLICT (user_id) DO UPDATE SET height_cm = EXCLUDED.height_cm, sex = EXCLUDED.sex, "

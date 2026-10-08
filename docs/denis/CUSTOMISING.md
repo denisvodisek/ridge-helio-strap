@@ -81,11 +81,13 @@ guarded by the same device token.
 
 ### Journal kinds
 
-`server/src/strap_server/journal.py` fixes the kinds (`caffeine`, `alcohol`, `weight`),
-their units and plausibility limits. Adding a kind means: add it to the `Literal`, `UNITS`
-and `limits`, then add the entry UI in `ui/journal/JournalScreen.kt`. `manual_entry`
-already has `end_ts`, `severity`, `notes` and `flags`, so durations (sauna, fasting) and
-ratings (mood, soreness) fit without a migration.
+`server/src/strap_server/journal.py` fixes the kinds (`caffeine`, `alcohol`, `water`,
+`supplement`, `weight`), their units and plausibility limits. Adding a kind means: add it
+to the `Literal`, `UNITS` and `limits`, then add the entry UI in `ui/journal/JournalScreen.kt`.
+Water's total, average and reminder live in `hydration.py` (SPEC S8), not in the phone.
+`manual_entry` already has `end_ts`, `severity`, `notes` and `flags`, so durations (sauna,
+fasting) and ratings (mood, soreness) fit without a migration. A supplement's effect is
+`notes`.
 
 ## 4 · Strap behaviour
 

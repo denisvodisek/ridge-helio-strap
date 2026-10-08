@@ -28,7 +28,16 @@ class ApiClient(private val link: ServerLink) {
 
     suspend fun journal(from: LocalDate, to: LocalDate): JSONArray = JSONArray(request("GET", "/v1/journal?from=$from&to=$to", null))
 
+    suspend fun hydration(day: LocalDate): JSONObject = get("/v1/journal/hydration?day=$day")
+
+    suspend fun setHome(day: LocalDate, lat: Double, lon: Double): JSONObject =
+        JSONObject(request("PUT", "/v1/journal/home?day=$day", JSONObject().put("lat", lat).put("lon", lon).toString()))
+
+    suspend fun clearHome(day: LocalDate): JSONObject = JSONObject(request("DELETE", "/v1/journal/home?day=$day", null))
+
     suspend fun addJournal(entry: JSONObject): JSONObject = JSONObject(request("POST", "/v1/journal", entry.toString()))
+
+    suspend fun updateJournal(id: String, entry: JSONObject): JSONObject = JSONObject(request("PUT", "/v1/journal/entry/$id", entry.toString()))
 
     suspend fun sessions(from: LocalDate, to: LocalDate): JSONArray = JSONArray(request("GET", "/v1/sessions?from=$from&to=$to", null))
 

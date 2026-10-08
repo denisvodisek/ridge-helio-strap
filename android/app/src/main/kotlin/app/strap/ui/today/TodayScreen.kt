@@ -22,8 +22,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.CoffeeMaker
 import androidx.compose.material.icons.rounded.EmojiFoodBeverage
+import androidx.compose.material.icons.rounded.Medication
 import androidx.compose.material.icons.rounded.MonitorWeight
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.WineBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -236,9 +238,11 @@ private fun IllnessBanner(text: String, onDismiss: () -> Unit) {
     }
 }
 
-internal fun journalIcon(e: JSONObject): ImageVector = when {
-    e.getString("kind") == "weight" -> Icons.Rounded.MonitorWeight
-    e.getString("kind") == "alcohol" -> Icons.Rounded.WineBar
+internal fun journalIcon(e: JSONObject): ImageVector = when (e.getString("kind")) {
+    "weight" -> Icons.Rounded.MonitorWeight
+    "alcohol" -> Icons.Rounded.WineBar
+    "water" -> Icons.Rounded.WaterDrop
+    "supplement" -> Icons.Rounded.Medication
     else -> when (e.optString("name")) {
         "espresso" -> Icons.Rounded.CoffeeMaker
         "tea" -> Icons.Rounded.EmojiFoodBeverage
@@ -246,14 +250,34 @@ internal fun journalIcon(e: JSONObject): ImageVector = when {
     }
 }
 
-/** "Caffeine · 95 mg" */
+/** "Caffeine · 95 mg", or the supplement's own name in place of the kind. */
 internal fun journalHeadline(e: JSONObject): String {
+    val kind = e.getString("kind")
+    val who = if (kind == "supplement") journalName(e) ?: "Supplement" else kind.replaceFirstChar { it.uppercase() }
+    return "$who · ${journalAmount(e)}"
+}
+
+internal fun journalAmount(e: JSONObject): String {
     val amount = e.getDouble("amount").let { if (it % 1.0 == 0.0) it.toInt().toString() else "%.1f".format(it) }
     val unit = e.optString("unit").let { if (it == "drink" || it == "drinks" || it == "standard") "standard" else it }
-    return "${e.getString("kind").replaceFirstChar { it.uppercase() }} · $amount $unit"
+    return "$amount $unit"
 }
 
 internal fun journalName(e: JSONObject): String? = e.optString("name").takeIf { it.isNotEmpty() && it != "null" }?.replaceFirstChar { it.uppercase() }
+
+internal fun journalEffect(e: JSONObject): String? = if (e.isNull("notes")) null else e.optString("notes").takeIf { it.isNotEmpty() && it != "null" }
+
+internal fun journalMomentTitle(e: JSONObject): String = when (e.getString("kind")) {
+    "water" -> "Water"
+    "supplement" -> journalName(e) ?: "Supplement"
+    else -> journalName(e) ?: e.getString("kind").replaceFirstChar { it.uppercase() }
+}
+
+internal fun journalMomentDetail(e: JSONObject): String = when (e.getString("kind")) {
+    "water" -> journalAmount(e)
+    "supplement" -> listOfNotNull(journalAmount(e), journalEffect(e)).joinToString(" · ")
+    else -> journalHeadline(e)
+}
 
 @Composable
 private fun moments(data: TodayData, nav: TodayNav): List<Moment> {
@@ -266,8 +290,7 @@ private fun moments(data: TodayData, nav: TodayNav): List<Moment> {
         }
         data.journal.forEach { e ->
             val ts = e.getLong("ts")
-            add(Moment(ts, clockOf(ts), journalIcon(e), c.stressTone, journalName(e) ?: e.getString("kind").replaceFirstChar { it.uppercase() },
-                journalHeadline(e), null, nav.journal))
+            add(Moment(ts, clockOf(ts), journalIcon(e), c.stressTone, journalMomentTitle(e), journalMomentDetail(e), null, nav.journal))
         }
         data.stress?.let { s ->
             add(Moment(s.maxAt, clockOf(s.maxAt), Icons.Rounded.Psychology, c.stressTone, "Stress peak", "Highest of the day",
