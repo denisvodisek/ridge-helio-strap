@@ -1,24 +1,39 @@
 package app.strap.ui.workout
 
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,19 +47,31 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimeInput
+import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import app.strap.ui.components.ConnectedButtons
 import app.strap.ui.components.HoldToConfirm
 import app.strap.ui.components.RidgeCard
@@ -106,15 +133,15 @@ fun WorkoutSheet(store: WorkoutStore, onDismiss: () -> Unit, onStart: (Sport) ->
     val time = rememberTimePickerState(oneHourAgo.hour, oneHourAgo.minute, is24Hour = true)
     var minutes by remember { mutableStateOf(60) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = LocalRidgeColors.current.card) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        containerColor = LocalRidgeColors.current.card, contentWindowInsets = { sheetInsets() }) {
+        KeyboardSheet(14.dp) {
             Text("Workout", style = RidgeType.sheetTitle)
             SportGrid(sports, sport) { sport = it }
             ConnectedButtons(Mode.entries, mode, { it.label }) { mode = it }
             AnimatedVisibility(mode == Mode.PAST, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Started at", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TimeInput(time)
+                    SheetTimeInput(time)
                     Text("Lasted", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     ConnectedButtons(listOf(30, 45, 60, 90, 120), minutes, { if (it < 60) "$it m" else "${it / 60}${if (it % 60 == 0) "" else ".5"} h" }) { minutes = it }
                 }
@@ -142,7 +169,19 @@ fun WorkoutSheet(store: WorkoutStore, onDismiss: () -> Unit, onStart: (Sport) ->
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimeSheet(start: Long, end: Long, onDismiss: () -> Unit, onSave: (Instant, Instant) -> Unit) {
+fun TimeSheet(
+    start: Long,
+    end: Long,
+    onDismiss: () -> Unit,
+    title: String = "Time",
+    maxHours: Int = 12,
+    tooLong: String = "A workout lasts at most 12 hours.",
+    note: String? = null,
+    serverError: String? = null,
+    rejectFutureEnd: Boolean = false,
+    onRestore: (() -> Unit)? = null,
+    onSave: (Instant, Instant) -> Unit,
+) {
     val zone = ZoneId.systemDefault()
     val began = remember(start) { Instant.ofEpochMilli(start).atZone(zone) }
     val ended = remember(end) { Instant.ofEpochMilli(end).atZone(zone) }
@@ -157,18 +196,22 @@ fun TimeSheet(start: Long, end: Long, onDismiss: () -> Unit, onSave: (Instant, I
     val problem = when {
         ms <= 0 -> "It has to end after it starts."
         newStart.isAfter(Instant.now()) -> "It can't start in the future."
-        ms > 12 * 3_600_000L -> "A workout lasts at most 12 hours."
+        rejectFutureEnd && newEnd.isAfter(Instant.now()) -> "It can't end in the future."
+        ms > maxHours * 3_600_000L -> tooLong
         else -> null
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = LocalRidgeColors.current.card) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Time", style = RidgeType.sheetTitle)
+        containerColor = LocalRidgeColors.current.card, contentWindowInsets = { sheetInsets() }) {
+        KeyboardSheet(10.dp) {
+            Text(title, style = RidgeType.sheetTitle)
             Text("Started at", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TimeInput(from)
+            SheetTimeInput(from)
             Text("Ended at", style = RidgeType.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TimeInput(to)
-            Subtle(problem ?: durationLabel(ms))
+            SheetTimeInput(to)
+            Text(problem ?: durationLabel(ms), style = RidgeType.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            note?.let { Text(it, style = RidgeType.body, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            serverError?.let { Text(it, style = RidgeType.body, color = MaterialTheme.colorScheme.error) }
+            if (onRestore != null) TextButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) { Text("Use the strap's times") }
             Button(
                 onClick = { onSave(newStart, newEnd) },
                 enabled = problem == null && (newStart.toEpochMilli() != start || newEnd.toEpochMilli() != end),
@@ -176,6 +219,108 @@ fun TimeSheet(start: Long, end: Long, onDismiss: () -> Unit, onSave: (Instant, I
             ) { Text("Save", style = RidgeType.cardTitle) }
         }
     }
+}
+
+/** Safe drawing, without the keyboard. The sheet window ignores the keys, so [KeyboardSheet] pads for them. */
+@Composable
+private fun sheetInsets(): WindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime)
+
+private val LocalSheetIme = staticCompositionLocalOf { 0 }
+
+/** The default scroll, plus the Hour and Minute captions that sit under the focused boxes. */
+private val fieldBringIntoView = object : BringIntoViewSpec {}
+
+/**
+ * Hour and minute are text fields. From Android 11 the sheet window is full screen and ignores
+ * the keyboard, so a tall sheet stays put and the keys cover the fields. Leave a gap the height
+ * of the keys and scroll the fields into the space above them.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun KeyboardSheet(spacing: Dp, content: @Composable ColumnScope.() -> Unit) {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    var imePx by remember { mutableIntStateOf(0) }
+    var topPx by remember { mutableIntStateOf(0) }
+    var navPx by remember { mutableIntStateOf(0) }
+    var windowPx by remember { mutableIntStateOf(0) }
+    DisposableEffect(view) {
+        val decor = view.dialogDecor()
+        if (decor == null) return@DisposableEffect onDispose { }
+        fun read() {
+            val insets = ViewCompat.getRootWindowInsets(decor) ?: return
+            imePx = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            topPx = maxOf(bars.top, cutout.top)
+            navPx = bars.bottom
+            windowPx = decor.height
+        }
+        val listener = ViewTreeObserver.OnGlobalLayoutListener { read() }
+        decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        decor.post { read() }
+        onDispose {
+            val observer = decor.viewTreeObserver
+            if (observer.isAlive) observer.removeOnGlobalLayoutListener(listener)
+        }
+    }
+    val keyboardOpen = imePx > 0 && windowPx > 0
+    val scroll = rememberScrollState()
+    LaunchedEffect(keyboardOpen) {
+        if (!keyboardOpen) scroll.scrollTo(0)
+    }
+    val cap = if (keyboardOpen) {
+        val handlePx = with(density) { 48.dp.roundToPx() }
+        val maxPx = (windowPx - imePx - topPx - navPx - handlePx).coerceAtLeast(with(density) { 160.dp.roundToPx() })
+        Modifier.heightIn(max = with(density) { maxPx.toDp() })
+    } else {
+        Modifier
+    }
+    val labelPx = with(density) { 36.dp.toPx() }
+    val bringIntoView = remember(labelPx) {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+                fieldBringIntoView.calculateScrollDistance(offset, size + labelPx, containerSize)
+        }
+    }
+    CompositionLocalProvider(LocalSheetIme provides imePx, LocalBringIntoViewSpec provides bringIntoView) {
+        Column(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth().then(cap).verticalScroll(scroll)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+                content = content,
+            )
+            if (keyboardOpen) Spacer(Modifier.height(with(density) { imePx.toDp() }))
+        }
+    }
+}
+
+/** The whole hour-and-minute control, scrolled above the keyboard, captions included. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SheetTimeInput(state: TimePickerState) {
+    val requester = remember { BringIntoViewRequester() }
+    val ime = LocalSheetIme.current
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, ime) {
+        if (focused && ime > 0) requester.bringIntoView()
+    }
+    Box(
+        Modifier.fillMaxWidth().bringIntoViewRequester(requester).onFocusEvent { focused = it.hasFocus },
+    ) { TimeInput(state) }
+}
+
+private fun View.dialogDecor(): View? {
+    var current: View? = this
+    var marked: View? = null
+    while (current != null) {
+        if (current is DialogWindowProvider) marked = current
+        current = current.parent as? View
+    }
+    return marked?.rootView
 }
 
 /**
