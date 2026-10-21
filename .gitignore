@@ -8,3 +8,9 @@ deploy/.env
 deploy/backups/
 dist/
 tools/demo-data/.env
+
+# Real Zepp screenshots from the strap wow. Demo Ridge shots in the same folder are fine.
+docs/denis/wow/img/zepp-*.jpg
+# Built deck and script embed those Zepp screens. Open locally. Do not commit.
+docs/denis/wow/index.html
+docs/denis/wow/script.html
